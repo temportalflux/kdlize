@@ -65,6 +65,11 @@ pub trait DocumentExt {
 	fn query_str_all(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Vec<&str>, Error>;
 }
 
+pub trait DocumentExt2 {
+	fn to_string_unescaped(&self) -> String;
+	fn from_node(node: kdl::KdlNode) -> Self;
+}
+
 impl DocumentQueryExt for kdl::KdlDocument {
 	fn query_opt(&self, query: impl AsRef<str>) -> Result<Option<&kdl::KdlNode>, InvalidQueryFormat> {
 		self.query(query.as_ref()).map_err(|e| InvalidQueryFormat(e))
@@ -152,6 +157,23 @@ impl DocumentExt for kdl::KdlDocument {
 			entries.push(node.get_str_req(key.clone())?);
 		}
 		Ok(entries)
+	}
+}
+
+impl DocumentExt2 for kdl::KdlDocument {
+	fn to_string_unescaped(&self) -> String {
+		let doc = self.to_string();
+		let doc = doc.replace("\\r", "");
+		let doc = doc.replace("\\n", "\n");
+		let doc = doc.replace("\\t", "\t");
+		let doc = doc.replace("    ", "\t");
+		doc
+	}
+
+	fn from_node(node: kdl::KdlNode) -> Self {
+		let mut doc = kdl::KdlDocument::default();
+		doc.nodes_mut().push(node);
+		doc
 	}
 }
 

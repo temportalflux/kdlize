@@ -4,6 +4,8 @@ use crate::{
 };
 
 pub trait NodeExt {
+	fn to_doc_string_unescaped(self) -> String;
+
 	/// The node is searched for an entry which matches the given key. If no entry is found, None is returned.
 	fn entry_opt(&self, key: impl Into<kdl::NodeKey>) -> Option<&kdl::KdlEntry>;
 	/// The node is searched for an entry which matches the given key. If no entry is found, an error is returned.
@@ -37,6 +39,11 @@ pub trait NodeExt {
 }
 
 impl NodeExt for kdl::KdlNode {
+	fn to_doc_string_unescaped(self) -> String {
+		use super::DocumentExt2;
+		kdl::KdlDocument::from_node(self).to_string_unescaped()
+	}
+
 	fn entry_opt(&self, key: impl Into<kdl::NodeKey>) -> Option<&kdl::KdlEntry> {
 		self.entry(key)
 	}
