@@ -212,57 +212,57 @@ impl<'doc, Context> NodeReader<'doc, Context> {
 		Ok(self.peak_req()?.type_req()?)
 	}
 
-	pub fn next_str_opt_t<T>(&mut self) -> Result<Option<T>, anyhow::Error>
+	pub fn next_str_opt_t<T>(&mut self) -> Result<Option<T>, Error>
 	where
 		T: FromStr,
-		T::Err: std::error::Error + Send + Sync + 'static,
+		Error: From<T::Err>,
 	{
 		let Some(str) = self.next_str_opt()? else { return Ok(None); };
 		Ok(Some(T::from_str(str)?))
 	}
 
-	pub fn next_str_req_t<T>(&mut self) -> Result<T, anyhow::Error>
+	pub fn next_str_req_t<T>(&mut self) -> Result<T, Error>
 	where
 		T: FromStr,
-		T::Err: std::error::Error + Send + Sync + 'static,
+		Error: From<T::Err>,
 	{
 		Ok(T::from_str(self.next_str_req()?)?)
 	}
 
-	pub fn get_str_req_t<T>(&self, key: impl AsRef<str>) -> Result<T, anyhow::Error>
+	pub fn get_str_req_t<T>(&self, key: impl AsRef<str>) -> Result<T, Error>
 	where
 		T: FromStr,
-		T::Err: std::error::Error + Send + Sync + 'static,
+		Error: From<T::Err>,
 	{
 		Ok(T::from_str(self.get_str_req(key)?)?)
 	}
 
-	pub fn query_opt_t<T>(&self, query: impl AsRef<str>) -> Result<Option<T>, anyhow::Error>
+	pub fn query_opt_t<T>(&self, query: impl AsRef<str>) -> Result<Option<T>, Error>
 	where
 		T: FromKdl<Context>,
-		anyhow::Error: From<T::Error>,
+		Error: From<T::Error>,
 		Context: Clone,
 	{
-		let Some(mut node) = self.query_opt(query).map_err(Error::from)? else { return Ok(None); };
+		let Some(mut node) = self.query_opt(query)? else { return Ok(None); };
 		Ok(Some(T::from_kdl(&mut node)?))
 	}
 
-	pub fn query_req_t<T>(&self, query: impl AsRef<str>) -> Result<T, anyhow::Error>
+	pub fn query_req_t<T>(&self, query: impl AsRef<str>) -> Result<T, Error>
 	where
 		T: FromKdl<Context>,
-		anyhow::Error: From<T::Error>,
+		Error: From<T::Error>,
 		Context: Clone,
 	{
 		Ok(T::from_kdl(&mut self.query_req(query)?)?)
 	}
 
-	pub fn query_all_t<T>(&self, query: impl kdl::IntoKdlQuery) -> Result<Vec<T>, anyhow::Error>
+	pub fn query_all_t<T>(&self, query: impl kdl::IntoKdlQuery) -> Result<Vec<T>, Error>
 	where
 		T: FromKdl<Context>,
-		anyhow::Error: From<T::Error>,
+		Error: From<T::Error>,
 		Context: Clone,
 	{
-		let nodes = self.query_all(query).map_err(Error::from)?;
+		let nodes = self.query_all(query)?;
 		let mut vec = Vec::with_capacity(nodes.len());
 		for mut node in nodes {
 			vec.push(T::from_kdl(&mut node)?);
@@ -270,23 +270,19 @@ impl<'doc, Context> NodeReader<'doc, Context> {
 		Ok(vec)
 	}
 
-	pub fn query_str_opt_t<T>(
-		&self,
-		query: impl AsRef<str>,
-		key: impl Into<kdl::NodeKey>,
-	) -> Result<Option<T>, anyhow::Error>
+	pub fn query_str_opt_t<T>(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Option<T>, Error>
 	where
 		T: FromStr,
-		T::Err: std::error::Error + Send + Sync + 'static,
+		Error: From<T::Err>,
 	{
 		let Some(str) = self.query_str_opt(query, key)? else { return Ok(None); };
 		Ok(Some(T::from_str(str)?))
 	}
 
-	pub fn query_str_req_t<T>(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<T, anyhow::Error>
+	pub fn query_str_req_t<T>(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<T, Error>
 	where
 		T: FromStr,
-		T::Err: std::error::Error + Send + Sync + 'static,
+		Error: From<T::Err>,
 	{
 		Ok(T::from_str(self.query_str_req(query, key)?)?)
 	}

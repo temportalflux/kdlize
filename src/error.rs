@@ -14,6 +14,8 @@ pub enum Error {
 	MissingChildren(#[from] NoChildren),
 	#[error(transparent)]
 	MissingDocChildren(#[from] EmptyDocument),
+	#[error(transparent)]
+	UserProvided(#[from] UserProvidedError),
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -54,3 +56,15 @@ pub struct NoChildren(pub kdl::KdlNode);
 #[derive(thiserror::Error, Debug, Clone)]
 #[error("Document has no children")]
 pub struct EmptyDocument(pub kdl::KdlDocument);
+
+#[derive(thiserror::Error, Debug, Clone)]
+#[error("{0}")]
+pub struct UserProvidedError(pub String);
+impl UserProvidedError {
+	pub fn from_error<E>(value: E) -> Self
+	where
+		E: std::error::Error + std::fmt::Debug,
+	{
+		Self(format!("{value:?}"))
+	}
+}
