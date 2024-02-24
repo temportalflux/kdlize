@@ -54,22 +54,30 @@ impl NodeExt for kdl::KdlNode {
 	}
 
 	fn get_bool_opt(&self, key: impl Into<kdl::NodeKey>) -> Result<Option<bool>, InvalidValueType> {
-		let Some(entry) = self.entry_opt(key) else { return Ok(None); };
+		let Some(entry) = self.entry_opt(key) else {
+			return Ok(None);
+		};
 		Ok(Some(entry.as_bool_req()?))
 	}
 
 	fn get_i64_opt(&self, key: impl Into<kdl::NodeKey>) -> Result<Option<i64>, InvalidValueType> {
-		let Some(entry) = self.entry_opt(key) else { return Ok(None); };
+		let Some(entry) = self.entry_opt(key) else {
+			return Ok(None);
+		};
 		Ok(Some(entry.as_i64_req()?))
 	}
 
 	fn get_f64_opt(&self, key: impl Into<kdl::NodeKey>) -> Result<Option<f64>, InvalidValueType> {
-		let Some(entry) = self.entry_opt(key) else { return Ok(None); };
+		let Some(entry) = self.entry_opt(key) else {
+			return Ok(None);
+		};
 		Ok(Some(entry.as_f64_req()?))
 	}
 
 	fn get_str_opt(&self, key: impl Into<kdl::NodeKey>) -> Result<Option<&str>, InvalidValueType> {
-		let Some(entry) = self.entry_opt(key) else { return Ok(None); };
+		let Some(entry) = self.entry_opt(key) else {
+			return Ok(None);
+		};
 		Ok(Some(entry.as_str_req()?))
 	}
 

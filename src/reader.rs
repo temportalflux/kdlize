@@ -64,7 +64,9 @@ impl<'doc, Context> NodeReader<'doc, Context> {
 	where
 		Context: Clone,
 	{
-		let Some(doc) = self.node.children() else { return None; };
+		let Some(doc) = self.node.children() else {
+			return None;
+		};
 		Some(Self::iter_from(&self.ctx, doc.nodes().iter()))
 	}
 
@@ -217,7 +219,9 @@ impl<'doc, Context> NodeReader<'doc, Context> {
 		T: FromStr,
 		Error: From<T::Err>,
 	{
-		let Some(str) = self.next_str_opt()? else { return Ok(None); };
+		let Some(str) = self.next_str_opt()? else {
+			return Ok(None);
+		};
 		Ok(Some(T::from_str(str)?))
 	}
 
@@ -243,7 +247,9 @@ impl<'doc, Context> NodeReader<'doc, Context> {
 		Error: From<T::Error>,
 		Context: Clone,
 	{
-		let Some(mut node) = self.query_opt(query)? else { return Ok(None); };
+		let Some(mut node) = self.query_opt(query)? else {
+			return Ok(None);
+		};
 		Ok(Some(T::from_kdl(&mut node)?))
 	}
 
@@ -275,7 +281,9 @@ impl<'doc, Context> NodeReader<'doc, Context> {
 		T: FromStr,
 		Error: From<T::Err>,
 	{
-		let Some(str) = self.query_str_opt(query, key)? else { return Ok(None); };
+		let Some(str) = self.query_str_opt(query, key)? else {
+			return Ok(None);
+		};
 		Ok(Some(T::from_str(str)?))
 	}
 

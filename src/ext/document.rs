@@ -84,22 +84,30 @@ impl DocumentQueryExt for kdl::KdlDocument {
 
 impl DocumentExt for kdl::KdlDocument {
 	fn query_bool_opt(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Option<bool>, Error> {
-		let Some(node) = self.query_opt(query)? else { return Ok(None); };
+		let Some(node) = self.query_opt(query)? else {
+			return Ok(None);
+		};
 		Ok(node.get_bool_opt(key)?)
 	}
 
 	fn query_i64_opt(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Option<i64>, Error> {
-		let Some(node) = self.query_opt(query)? else { return Ok(None); };
+		let Some(node) = self.query_opt(query)? else {
+			return Ok(None);
+		};
 		Ok(node.get_i64_opt(key)?)
 	}
 
 	fn query_f64_opt(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Option<f64>, Error> {
-		let Some(node) = self.query_opt(query)? else { return Ok(None); };
+		let Some(node) = self.query_opt(query)? else {
+			return Ok(None);
+		};
 		Ok(node.get_f64_opt(key)?)
 	}
 
 	fn query_str_opt(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Option<&str>, Error> {
-		let Some(node) = self.query_opt(query)? else { return Ok(None); };
+		let Some(node) = self.query_opt(query)? else {
+			return Ok(None);
+		};
 		Ok(node.get_str_opt(key)?)
 	}
 
@@ -179,7 +187,9 @@ impl DocumentExt2 for kdl::KdlDocument {
 
 impl DocumentQueryExt for kdl::KdlNode {
 	fn query_opt(&self, query: impl AsRef<str>) -> Result<Option<&kdl::KdlNode>, InvalidQueryFormat> {
-		let Some(doc) = self.children() else { return Ok(None); };
+		let Some(doc) = self.children() else {
+			return Ok(None);
+		};
 		doc.query_opt(query)
 	}
 
@@ -191,22 +201,30 @@ impl DocumentQueryExt for kdl::KdlNode {
 
 impl DocumentExt for kdl::KdlNode {
 	fn query_bool_opt(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Option<bool>, Error> {
-		let Some(doc) = self.children() else { return Ok(None); };
+		let Some(doc) = self.children() else {
+			return Ok(None);
+		};
 		doc.query_bool_opt(query, key)
 	}
 
 	fn query_i64_opt(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Option<i64>, Error> {
-		let Some(doc) = self.children() else { return Ok(None); };
+		let Some(doc) = self.children() else {
+			return Ok(None);
+		};
 		doc.query_i64_opt(query, key)
 	}
 
 	fn query_f64_opt(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Option<f64>, Error> {
-		let Some(doc) = self.children() else { return Ok(None); };
+		let Some(doc) = self.children() else {
+			return Ok(None);
+		};
 		doc.query_f64_opt(query, key)
 	}
 
 	fn query_str_opt(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Option<&str>, Error> {
-		let Some(doc) = self.children() else { return Ok(None); };
+		let Some(doc) = self.children() else {
+			return Ok(None);
+		};
 		doc.query_str_opt(query, key)
 	}
 
@@ -231,22 +249,30 @@ impl DocumentExt for kdl::KdlNode {
 	}
 
 	fn query_bool_all(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Vec<bool>, Error> {
-		let Some(doc) = self.children() else { return Ok(Vec::new()); };
+		let Some(doc) = self.children() else {
+			return Ok(Vec::new());
+		};
 		doc.query_bool_all(query, key)
 	}
 
 	fn query_i64_all(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Vec<i64>, Error> {
-		let Some(doc) = self.children() else { return Ok(Vec::new()); };
+		let Some(doc) = self.children() else {
+			return Ok(Vec::new());
+		};
 		doc.query_i64_all(query, key)
 	}
 
 	fn query_f64_all(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Vec<f64>, Error> {
-		let Some(doc) = self.children() else { return Ok(Vec::new()); };
+		let Some(doc) = self.children() else {
+			return Ok(Vec::new());
+		};
 		doc.query_f64_all(query, key)
 	}
 
 	fn query_str_all(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Vec<&str>, Error> {
-		let Some(doc) = self.children() else { return Ok(Vec::new()); };
+		let Some(doc) = self.children() else {
+			return Ok(Vec::new());
+		};
 		doc.query_str_all(query, key)
 	}
 }
