@@ -39,6 +39,10 @@ impl NodeBuilder {
 		if !children.is_empty() {
 			node.ensure_children().nodes_mut().append(&mut children);
 		}
+
+		node.clear_fmt_recursive();
+		node.fmt();
+
 		node
 	}
 
