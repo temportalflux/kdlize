@@ -119,60 +119,264 @@ impl std::ops::AddAssign for NodeBuilder {
 
 // Building children
 impl NodeBuilder {
-	// Pushes a node into the list of children.
-	pub fn push_child(&mut self, node: kdl::KdlNode) {
-		self.children.push(node);
-	}
 
-	// Builds a node from an `AsKdl` type, and then pushes the node into the list of children.
-	pub fn push_child_t(&mut self, name: impl Into<kdl::KdlIdentifier>, data: &impl AsKdl) {
-		self.push_child(data.as_kdl().build(name))
-	}
-
-	// Pushes a node into the list of children, only if it is not empty.
-	// Empty nodes are those without arguments, properties, or children.
-	pub fn push_child_nonempty(&mut self, node: kdl::KdlNode) {
-		let has_children = node.children().map(|doc| !doc.is_empty()).unwrap_or(false);
-		if !node.entries().is_empty() || has_children {
-			self.push_child(node);
+	/// Pushes a node into the list of children.
+	/// ```
+	/// let mut builder = NodeBuilder::default();
+	/// 
+	/// // pushes the node itself
+	/// let node_with_content: kdl::KdlNode;
+	/// builder.push_child(node_with_content);
+	///
+	/// // none, so no node is pushed
+	/// let node_opt: Option<kdl::KdlNode> = None;
+	/// builder.push_child(node_opt);
+	///
+	/// // the provided node is empty, and the OmitIfEmpty flag is provided,
+	/// // so no node is pushed.
+	/// let empty_node: kdl::KdlNode;
+	/// builder.push_child((empty_node, OmitIfEmpty));
+	/// 
+	/// // node is some but is empty, so no node is pushed
+	/// let some_empty_node: Option<kdl::KdlNode>;
+	/// builder.push_child((some_empty_node, OmitIfEmpty));
+	/// ```
+	pub fn push_child(&mut self, child: impl Into<BuiltNode>) {
+		let node: BuiltNode = child.into();
+		if let Some(node) = node.into() {
+			self.children.push(node);
 		}
 	}
 
-	// Builds a node from an `AsKdl` type, and then pushes the node into the list of children, only if the node is not empty.
-	pub fn push_child_nonempty_t(&mut self, name: impl Into<kdl::KdlIdentifier>, data: &impl AsKdl) {
-		self.push_child_nonempty(data.as_kdl().build(name))
+	// Builds a node from a name and `AsKdl` implementation,
+	// pushing the generated node into the list of children.
+	/// ```
+	/// let mut builder = NodeBuilder::default();
+	/// 
+	/// let value: AsKdl;
+	/// builder.push_child_t(("name", value));
+	///
+	/// // No-Op: value is none and nothing can be built
+	/// let value: Option<AsKdl> = None;
+	/// builder.push_child_t(("name", value));
+	///
+	/// // No-Op: the AsKdl impl creates an empty builder, so the generated node is omitted.
+	/// let empty_value: AsKdl;
+	/// builder.push_child_t(("name", value, OmitIfEmpty));
+	/// 
+	/// // No-Op: the value is non-none, but the node it generates is empty, so it is omitted
+	/// let empty_value: Option<AsKdl>;
+	/// builder.push_child_t(("name", empty_value, OmitIfEmpty));
+	/// ```
+	pub fn push_child_t<'op>(&mut self, child: impl Into<NamedBuildableNode<'op>>) {
+		self.push_child(child.into());
 	}
 	
-	// Pushes an optional node into the list of children.
-	pub fn push_child_opt(&mut self, node: Option<kdl::KdlNode>) {
-		if let Some(node) = node {
-			self.push_child(node);
+	// Iterates over the provided iter to generate named nodes, omiting empty ones if the entry specifies.
+	pub fn push_children<'op, V>(&mut self, iter: impl Iterator<Item=V>) where V: Into<NamedBuildableNode<'op>> {
+		for entry in iter {
+			self.push_child_t(entry.into());
 		}
 	}
 
-	// Builds a node from an `AsKdl` type (if non-none), and then pushes the node into the list of children.
-	pub fn push_child_opt_t(&mut self, name: impl Into<kdl::KdlIdentifier>, data: &Option<impl AsKdl>) {
-		self.push_child_opt(data.as_ref().map(|data| data.as_kdl().build(name)))
+	// Iterates over the provided list to generate nodes with the given name, omitting empty nodes if desired.
+	/// ```
+	/// let mut builder = NodeBuilder::default();
+	///
+	/// let items: Vec<dyn AsKdl>;
+	/// builder.push_children_t("entry", items.iter());
+	///
+	/// let items: Vec<dyn AsKdl>;
+	/// builder.push_children_t("entry", items.iter(), OmitIfEmpty);
+	/// ```
+	pub fn push_children_t<'op>(&mut self, list: impl Into<NamedBuildableNodeList<'op>>) {
+		self.push_children(list.into().into_iter());
 	}
+}
 
-	pub fn push_child_opt_nonempty(&mut self, node: Option<kdl::KdlNode>) {
-		if let Some(node) = node {
-			self.push_child_nonempty(node)
+#[derive(Clone, Copy)]
+pub struct OmitIfEmpty;
+
+pub struct BuiltNode {
+	node: Option<kdl::KdlNode>,
+	omit_if_empty: Option<OmitIfEmpty>,
+}
+
+impl Into<Option<kdl::KdlNode>> for BuiltNode {
+	fn into(self) -> Option<kdl::KdlNode> {
+		let Some(node) = self.node else { return None; };
+		if self.omit_if_empty.is_none() {
+			return Some(node);
+		}
+		let has_children = node.children().map(|doc| !doc.nodes().is_empty()).unwrap_or(false);
+		let is_empty = node.entries().is_empty() && !has_children;
+		(!is_empty).then_some(node)
+	}
+}
+
+impl From<(Option<kdl::KdlNode>, Option<OmitIfEmpty>)> for BuiltNode {
+	fn from((node, omit_if_empty): (Option<kdl::KdlNode>, Option<OmitIfEmpty>)) -> Self {
+		Self { node, omit_if_empty }
+	}
+}
+
+impl From<Option<kdl::KdlNode>> for BuiltNode {
+	fn from(node: Option<kdl::KdlNode>) -> Self {
+		Self::from((node, None))
+	}
+}
+
+impl From<(Option<kdl::KdlNode>, OmitIfEmpty)> for BuiltNode {
+	fn from((node, omit_if_empty): (Option<kdl::KdlNode>, OmitIfEmpty)) -> Self {
+		Self::from((node, Some(omit_if_empty)))
+	}
+}
+
+impl From<kdl::KdlNode> for BuiltNode {
+	fn from(node: kdl::KdlNode) -> Self {
+		Self::from((Some(node), None))
+	}
+}
+
+impl From<(kdl::KdlNode, OmitIfEmpty)> for BuiltNode {
+	fn from((node, omit_if_empty): (kdl::KdlNode, OmitIfEmpty)) -> Self {
+		Self::from((Some(node), Some(omit_if_empty)))
+	}
+}
+
+impl<'builder> From<NamedBuildableNode<'builder>> for BuiltNode {
+		fn from(named: NamedBuildableNode<'builder>) -> Self {
+			let node = named.value.map(|value| value.as_kdl().build(named.name));
+			Self { node, omit_if_empty: named.omit_if_empty }
+		}
+}
+
+pub struct NamedBuildableNode<'builder> {
+	name: kdl::KdlIdentifier,
+	value: Option<&'builder dyn AsKdl>,
+	omit_if_empty: Option<OmitIfEmpty>,
+}
+
+// Base from impl, takes the name, an optional AsKdl, and a flag indicating if the generated node should be omitted if its empty
+impl<'builder, K, V> From<(K, Option<&'builder V>, Option<OmitIfEmpty>)> for NamedBuildableNode<'builder>
+where
+	K: Into<kdl::KdlIdentifier>,
+	V: AsKdl,
+{
+	fn from((key, value, omit_if_empty): (K, Option<&'builder V>, Option<OmitIfEmpty>)) -> Self {
+		Self {
+			name: key.into(),
+			value: value.map(|v| v as &dyn AsKdl),
+			omit_if_empty,
 		}
 	}
+}
 
-	pub fn push_child_opt_nonempty_t(&mut self, name: impl Into<kdl::KdlIdentifier>, data: &Option<impl AsKdl>) {
-		self.push_child_opt_nonempty(data.as_ref().map(|data| data.as_kdl().build(name)))
+impl<'builder, K, V> From<(K, &'builder V)> for NamedBuildableNode<'builder>
+where
+	K: Into<kdl::KdlIdentifier>,
+	V: AsKdl,
+{
+	fn from((key, value): (K, &'builder V)) -> Self {
+		Self::from((key, Some(value), None))
 	}
+}
 
-	pub fn with_child(mut self, node: kdl::KdlNode) -> Self {
-		self.push_child(node);
-		self
+impl<'builder, K, V> From<(K, &'builder V, OmitIfEmpty)> for NamedBuildableNode<'builder>
+where
+	K: Into<kdl::KdlIdentifier>,
+	V: AsKdl,
+{
+	fn from((key, value, omit_if_empty): (K, &'builder V, OmitIfEmpty)) -> Self {
+		Self::from((key, Some(value), Some(omit_if_empty)))
 	}
+}
 
-	pub fn push_children_t<'this, 'iter, 'item, Iter, Item>(&'this mut self, name: impl Into<kdl::KdlIdentifier> + Clone, iter: Iter) where Iter: Iterator<Item=&'item Item>, Item: AsKdl + 'item {
-		for data in iter {
-			self.push_child_t(name.clone(), data);
-		}
+impl<'builder, K, V> From<(K, Option<&'builder V>)> for NamedBuildableNode<'builder>
+where
+	K: Into<kdl::KdlIdentifier>,
+	V: AsKdl,
+{
+	fn from((key, value): (K, Option<&'builder V>)) -> Self {
+		Self::from((key, value, None))
+	}
+}
+
+impl<'builder, K, V> From<(K, Option<&'builder V>, OmitIfEmpty)> for NamedBuildableNode<'builder>
+where
+	K: Into<kdl::KdlIdentifier>,
+	V: AsKdl,
+{
+	fn from((key, value, omit_if_empty): (K, Option<&'builder V>, OmitIfEmpty)) -> Self {
+		Self::from((key, value, Some(omit_if_empty)))
+	}
+}
+
+impl<'builder, K, V> From<(K, &'builder Option<V>)> for NamedBuildableNode<'builder>
+where
+	K: Into<kdl::KdlIdentifier>,
+	V: AsKdl,
+{
+	fn from((key, value): (K, &'builder Option<V>)) -> Self {
+		Self::from((key, value.as_ref()))
+	}
+}
+
+impl<'builder, K, V> From<(K, &'builder Option<V>, OmitIfEmpty)> for NamedBuildableNode<'builder>
+where
+	K: Into<kdl::KdlIdentifier>,
+	V: AsKdl,
+{
+	fn from((key, value, omit_if_empty): (K, &'builder Option<V>, OmitIfEmpty)) -> Self {
+		Self::from((key, value.as_ref(), Some(omit_if_empty)))
+	}
+}
+
+pub struct NamedBuildableNodeList<'op>(Vec<NamedBuildableNode<'op>>);
+
+impl<'op> NamedBuildableNodeList<'op>
+{
+	fn into_iter(self) -> impl Iterator<Item=NamedBuildableNode<'op>> {
+		self.0.into_iter()
+	}
+}
+
+impl<'op, K, I, V> From<(K, I, Option<OmitIfEmpty>)> for NamedBuildableNodeList<'op>
+where
+K: Into<kdl::KdlIdentifier>,
+I: Iterator<Item=&'op V>,
+V: AsKdl + 'op,
+NamedBuildableNode<'op>: From<(kdl::KdlIdentifier, Option<I::Item>, Option<OmitIfEmpty>)>
+{
+	fn from((name, iter, omit_if_empty): (K, I, Option<OmitIfEmpty>)) -> Self {
+		let name = name.into();
+		let iter = iter.map(move |v| {
+			NamedBuildableNode::from((name.clone(), Some(v), omit_if_empty))
+		});
+		Self(iter.collect())
+	}
+}
+
+impl<'op, K, I, V> From<(K, I)> for NamedBuildableNodeList<'op>
+where
+K: Into<kdl::KdlIdentifier>,
+I: Iterator<Item=&'op V>,
+V: AsKdl + 'op,
+NamedBuildableNode<'op>: From<(kdl::KdlIdentifier, Option<I::Item>, Option<OmitIfEmpty>)>
+{
+	fn from((name, iter): (K, I)) -> Self {
+		Self::from((name, iter, None))
+	}
+}
+
+impl<'op, K, I, V> From<(K, I, OmitIfEmpty)> for NamedBuildableNodeList<'op>
+where
+K: Into<kdl::KdlIdentifier>,
+I: Iterator<Item=&'op V>,
+V: AsKdl + 'op,
+NamedBuildableNode<'op>: From<(kdl::KdlIdentifier, Option<I::Item>, Option<OmitIfEmpty>)>
+{
+	fn from((name, iter, omit_if_empty): (K, I, OmitIfEmpty)) -> Self {
+		Self::from((name, iter, Some(omit_if_empty)))
 	}
 }
