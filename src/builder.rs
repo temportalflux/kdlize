@@ -119,11 +119,10 @@ impl std::ops::AddAssign for NodeBuilder {
 
 // Building children
 impl NodeBuilder {
-
 	/// Pushes a node into the list of children.
 	/// ```
 	/// let mut builder = NodeBuilder::default();
-	/// 
+	///
 	/// // pushes the node itself
 	/// let node_with_content: kdl::KdlNode;
 	/// builder.push_child(node_with_content);
@@ -136,7 +135,7 @@ impl NodeBuilder {
 	/// // so no node is pushed.
 	/// let empty_node: kdl::KdlNode;
 	/// builder.push_child((empty_node, OmitIfEmpty));
-	/// 
+	///
 	/// // node is some but is empty, so no node is pushed
 	/// let some_empty_node: Option<kdl::KdlNode>;
 	/// builder.push_child((some_empty_node, OmitIfEmpty));
@@ -152,7 +151,7 @@ impl NodeBuilder {
 	// pushing the generated node into the list of children.
 	/// ```
 	/// let mut builder = NodeBuilder::default();
-	/// 
+	///
 	/// let value: AsKdl;
 	/// builder.push_child_t(("name", value));
 	///
@@ -163,7 +162,7 @@ impl NodeBuilder {
 	/// // No-Op: the AsKdl impl creates an empty builder, so the generated node is omitted.
 	/// let empty_value: AsKdl;
 	/// builder.push_child_t(("name", value, OmitIfEmpty));
-	/// 
+	///
 	/// // No-Op: the value is non-none, but the node it generates is empty, so it is omitted
 	/// let empty_value: Option<AsKdl>;
 	/// builder.push_child_t(("name", empty_value, OmitIfEmpty));
@@ -171,9 +170,12 @@ impl NodeBuilder {
 	pub fn push_child_t<'op>(&mut self, child: impl Into<NamedBuildableNode<'op>>) {
 		self.push_child(child.into());
 	}
-	
+
 	// Iterates over the provided iter to generate named nodes, omiting empty ones if the entry specifies.
-	pub fn push_children<'op, V>(&mut self, iter: impl Iterator<Item=V>) where V: Into<NamedBuildableNode<'op>> {
+	pub fn push_children<'op, V>(&mut self, iter: impl Iterator<Item = V>)
+	where
+		V: Into<NamedBuildableNode<'op>>,
+	{
 		for entry in iter {
 			self.push_child_t(entry.into());
 		}
@@ -204,7 +206,9 @@ pub struct BuiltNode {
 
 impl Into<Option<kdl::KdlNode>> for BuiltNode {
 	fn into(self) -> Option<kdl::KdlNode> {
-		let Some(node) = self.node else { return None; };
+		let Some(node) = self.node else {
+			return None;
+		};
 		if self.omit_if_empty.is_none() {
 			return Some(node);
 		}
@@ -245,10 +249,13 @@ impl From<(kdl::KdlNode, OmitIfEmpty)> for BuiltNode {
 }
 
 impl<'builder> From<NamedBuildableNode<'builder>> for BuiltNode {
-		fn from(named: NamedBuildableNode<'builder>) -> Self {
-			let node = named.value.map(|value| value.as_kdl().build(named.name));
-			Self { node, omit_if_empty: named.omit_if_empty }
+	fn from(named: NamedBuildableNode<'builder>) -> Self {
+		let node = named.value.map(|value| value.as_kdl().build(named.name));
+		Self {
+			node,
+			omit_if_empty: named.omit_if_empty,
 		}
+	}
 }
 
 pub struct NamedBuildableNode<'builder> {
@@ -334,35 +341,32 @@ where
 
 pub struct NamedBuildableNodeList<'op>(Vec<NamedBuildableNode<'op>>);
 
-impl<'op> NamedBuildableNodeList<'op>
-{
-	fn into_iter(self) -> impl Iterator<Item=NamedBuildableNode<'op>> {
+impl<'op> NamedBuildableNodeList<'op> {
+	fn into_iter(self) -> impl Iterator<Item = NamedBuildableNode<'op>> {
 		self.0.into_iter()
 	}
 }
 
 impl<'op, K, I, V> From<(K, I, Option<OmitIfEmpty>)> for NamedBuildableNodeList<'op>
 where
-K: Into<kdl::KdlIdentifier>,
-I: Iterator<Item=&'op V>,
-V: AsKdl + 'op,
-NamedBuildableNode<'op>: From<(kdl::KdlIdentifier, Option<I::Item>, Option<OmitIfEmpty>)>
+	K: Into<kdl::KdlIdentifier>,
+	I: Iterator<Item = &'op V>,
+	V: AsKdl + 'op,
+	NamedBuildableNode<'op>: From<(kdl::KdlIdentifier, Option<I::Item>, Option<OmitIfEmpty>)>,
 {
 	fn from((name, iter, omit_if_empty): (K, I, Option<OmitIfEmpty>)) -> Self {
 		let name = name.into();
-		let iter = iter.map(move |v| {
-			NamedBuildableNode::from((name.clone(), Some(v), omit_if_empty))
-		});
+		let iter = iter.map(move |v| NamedBuildableNode::from((name.clone(), Some(v), omit_if_empty)));
 		Self(iter.collect())
 	}
 }
 
 impl<'op, K, I, V> From<(K, I)> for NamedBuildableNodeList<'op>
 where
-K: Into<kdl::KdlIdentifier>,
-I: Iterator<Item=&'op V>,
-V: AsKdl + 'op,
-NamedBuildableNode<'op>: From<(kdl::KdlIdentifier, Option<I::Item>, Option<OmitIfEmpty>)>
+	K: Into<kdl::KdlIdentifier>,
+	I: Iterator<Item = &'op V>,
+	V: AsKdl + 'op,
+	NamedBuildableNode<'op>: From<(kdl::KdlIdentifier, Option<I::Item>, Option<OmitIfEmpty>)>,
 {
 	fn from((name, iter): (K, I)) -> Self {
 		Self::from((name, iter, None))
@@ -371,10 +375,10 @@ NamedBuildableNode<'op>: From<(kdl::KdlIdentifier, Option<I::Item>, Option<OmitI
 
 impl<'op, K, I, V> From<(K, I, OmitIfEmpty)> for NamedBuildableNodeList<'op>
 where
-K: Into<kdl::KdlIdentifier>,
-I: Iterator<Item=&'op V>,
-V: AsKdl + 'op,
-NamedBuildableNode<'op>: From<(kdl::KdlIdentifier, Option<I::Item>, Option<OmitIfEmpty>)>
+	K: Into<kdl::KdlIdentifier>,
+	I: Iterator<Item = &'op V>,
+	V: AsKdl + 'op,
+	NamedBuildableNode<'op>: From<(kdl::KdlIdentifier, Option<I::Item>, Option<OmitIfEmpty>)>,
 {
 	fn from((name, iter, omit_if_empty): (K, I, OmitIfEmpty)) -> Self {
 		Self::from((name, iter, Some(omit_if_empty)))
