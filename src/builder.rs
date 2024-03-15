@@ -186,10 +186,10 @@ impl NodeBuilder {
 	/// let mut builder = NodeBuilder::default();
 	///
 	/// let items: Vec<dyn AsKdl>;
-	/// builder.push_children_t("entry", items.iter());
+	/// builder.push_children_t(("entry", items.iter()));
 	///
 	/// let items: Vec<dyn AsKdl>;
-	/// builder.push_children_t("entry", items.iter(), OmitIfEmpty);
+	/// builder.push_children_t(("entry", items.iter(), OmitIfEmpty));
 	/// ```
 	pub fn push_children_t<'op>(&mut self, list: impl Into<NamedBuildableNodeList<'op>>) {
 		self.push_children(list.into().into_iter());
