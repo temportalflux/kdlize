@@ -241,6 +241,17 @@ impl<'doc, Context> NodeReader<'doc, Context> {
 		Ok(T::from_str(self.next_str_req()?)?)
 	}
 
+	pub fn get_str_opt_t<T>(&self, key: impl AsRef<str>) -> Result<Option<T>, anyhow::Error>
+	where
+		T: FromStr,
+		T::Err: std::error::Error + Send + Sync + 'static,
+	{
+		match self.get_str_opt(key)? {
+			None => Ok(None),
+			Some(str) => Ok(Some(T::from_str(str)?)),
+		}
+	}
+
 	pub fn get_str_req_t<T>(&self, key: impl AsRef<str>) -> Result<T, anyhow::Error>
 	where
 		T: FromStr,

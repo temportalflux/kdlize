@@ -68,7 +68,11 @@ pub trait DocumentExt {
 pub trait DocumentExt2 {
 	fn to_string_unescaped(&self) -> String;
 	fn from_node(node: kdl::KdlNode) -> Self;
-	fn query_all_t<T, Context, Error>(&self, ctx: &Context, query: impl AsRef<str>) -> Result<Vec<T>, Error> where T: crate::FromKdl<Context>, Context: Clone, Error: From<kdl::KdlError> + From<T::Error>;
+	fn query_all_t<T, Context, Error>(&self, ctx: &Context, query: impl AsRef<str>) -> Result<Vec<T>, Error>
+	where
+		T: crate::FromKdl<Context>,
+		Context: Clone,
+		Error: From<kdl::KdlError> + From<T::Error>;
 }
 
 impl DocumentQueryExt for kdl::KdlDocument {
@@ -184,8 +188,13 @@ impl DocumentExt2 for kdl::KdlDocument {
 		doc.nodes_mut().push(node);
 		doc
 	}
-	
-	fn query_all_t<T, Context, Error>(&self, ctx: &Context, query: impl AsRef<str>) -> Result<Vec<T>, Error> where T: crate::FromKdl<Context>, Context: Clone, Error: From<kdl::KdlError> + From<T::Error> {
+
+	fn query_all_t<T, Context, Error>(&self, ctx: &Context, query: impl AsRef<str>) -> Result<Vec<T>, Error>
+	where
+		T: crate::FromKdl<Context>,
+		Context: Clone,
+		Error: From<kdl::KdlError> + From<T::Error>,
+	{
 		let nodes = self.query_all(query.as_ref())?.collect::<Vec<_>>();
 		let mut vec = Vec::with_capacity(nodes.len());
 		for node in nodes {
