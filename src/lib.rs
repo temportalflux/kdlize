@@ -66,6 +66,19 @@ impl AsKdl for String {
 		node
 	}
 }
+impl<Item: AsKdl> AsKdl for (&String, &Item) {
+	fn as_kdl(&self) -> NodeBuilder {
+		let mut node = NodeBuilder::default();
+		node.push_entry(self.0.as_str());
+		node += self.1.as_kdl();
+		node
+	}
+}
+impl<V: AsKdl> AsKdl for &V {
+	fn as_kdl(&self) -> NodeBuilder {
+		(*self).as_kdl()
+	}
+}
 
 pub trait FromKdl<Context> {
 	type Error;
@@ -104,6 +117,18 @@ impl<Context> FromKdl<Context> for String {
 	type Error = crate::error::Error;
 	fn from_kdl<'doc>(node: &mut NodeReader<'doc, Context>) -> Result<Self, Self::Error> {
 		Ok(node.next_str_req()?.to_string())
+	}
+}
+impl<Item, Context> FromKdl<Context> for (String, Item)
+where
+	Item: FromKdl<Context>,
+	Item::Error: From<crate::error::Error>,
+{
+	type Error = Item::Error;
+	fn from_kdl<'doc>(node: &mut NodeReader<'doc, Context>) -> Result<Self, Self::Error> {
+		let name = node.next_str_req()?.to_owned();
+		let item = Item::from_kdl(node)?;
+		Ok((name, item))
 	}
 }
 

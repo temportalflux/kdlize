@@ -11,6 +11,12 @@ impl NodeBuilder {
 		self.entries.is_empty() && self.children.is_empty()
 	}
 
+	pub fn into_document(self) -> kdl::KdlDocument {
+		let mut doc = kdl::KdlDocument::new();
+		*doc.nodes_mut() = self.children;
+		doc
+	}
+
 	pub fn build(self, name: impl Into<kdl::KdlIdentifier>) -> kdl::KdlNode {
 		let Self {
 			mut entries,
@@ -114,6 +120,12 @@ impl std::ops::AddAssign for NodeBuilder {
 	fn add_assign(&mut self, mut rhs: Self) {
 		self.entries.append(&mut rhs.entries);
 		self.children.append(&mut rhs.children);
+	}
+}
+
+impl Into<kdl::KdlDocument> for NodeBuilder {
+	fn into(self) -> kdl::KdlDocument {
+		self.into_document()
 	}
 }
 
@@ -350,7 +362,7 @@ impl<'op> NamedBuildableNodeList<'op> {
 impl<'op, K, I, V> From<(K, I, Option<OmitIfEmpty>)> for NamedBuildableNodeList<'op>
 where
 	K: Into<kdl::KdlIdentifier>,
-	I: Iterator<Item = &'op V>,
+	I: Iterator<Item = V>,
 	V: AsKdl + 'op,
 	NamedBuildableNode<'op>: From<(kdl::KdlIdentifier, Option<I::Item>, Option<OmitIfEmpty>)>,
 {
@@ -364,7 +376,7 @@ where
 impl<'op, K, I, V> From<(K, I)> for NamedBuildableNodeList<'op>
 where
 	K: Into<kdl::KdlIdentifier>,
-	I: Iterator<Item = &'op V>,
+	I: Iterator<Item = V>,
 	V: AsKdl + 'op,
 	NamedBuildableNode<'op>: From<(kdl::KdlIdentifier, Option<I::Item>, Option<OmitIfEmpty>)>,
 {
@@ -376,7 +388,7 @@ where
 impl<'op, K, I, V> From<(K, I, OmitIfEmpty)> for NamedBuildableNodeList<'op>
 where
 	K: Into<kdl::KdlIdentifier>,
-	I: Iterator<Item = &'op V>,
+	I: Iterator<Item = V>,
 	V: AsKdl + 'op,
 	NamedBuildableNode<'op>: From<(kdl::KdlIdentifier, Option<I::Item>, Option<OmitIfEmpty>)>,
 {
