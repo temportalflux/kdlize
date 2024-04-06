@@ -35,9 +35,12 @@ impl NodeBuilder {
 		// unstable:drain_filter
 		let mut i = 0;
 		while i < entries.len() {
-			if entries[i].name().is_none() {
+			let is_valid = !entries[i].value().is_null();
+			if entries[i].name().is_none() || !is_valid {
 				let val = entries.remove(i);
-				node.entries_mut().push(val);
+				if is_valid {
+					node.entries_mut().push(val);
+				}
 			} else {
 				i += 1;
 			}
