@@ -236,7 +236,8 @@ impl<'doc, Context> NodeReader<'doc, Context> {
 	pub fn next_str_req_t<T>(&mut self) -> Result<T, anyhow::Error>
 	where
 		T: FromStr,
-		T::Err: std::error::Error + Send + Sync + 'static,
+		T::Err: Send + Sync + 'static,
+		anyhow::Error: From<T::Err>,
 	{
 		Ok(T::from_str(self.next_str_req()?)?)
 	}
