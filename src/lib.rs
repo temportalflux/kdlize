@@ -59,17 +59,22 @@ impl_askdl_entry!(f32, |v| v as f64);
 impl_askdl_entry!(f64, |v| v);
 impl AsKdl for String {
 	fn as_kdl(&self) -> NodeBuilder {
+		self.as_str().as_kdl()
+	}
+}
+impl AsKdl for &str {
+	fn as_kdl(&self) -> NodeBuilder {
 		let mut node = NodeBuilder::default();
 		if !self.is_empty() {
-			node.push_entry(self.clone());
+			node.entry(self.to_owned());
 		}
 		node
 	}
 }
-impl<Item: AsKdl> AsKdl for (&String, &Item) {
+impl<S, Item: AsKdl> AsKdl for (S, Item) where S: AsRef<str> {
 	fn as_kdl(&self) -> NodeBuilder {
 		let mut node = NodeBuilder::default();
-		node.push_entry(self.0.as_str());
+		node.entry(self.0.as_ref());
 		node += self.1.as_kdl();
 		node
 	}
