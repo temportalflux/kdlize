@@ -53,7 +53,10 @@ where
 {
 	fn from((name, builder): (Name, super::NodeBuilder)) -> Self {
 		let node = builder.build(name);
-		Self { node: Some(node), omit_if_empty: None }
+		Self {
+			node: Some(node),
+			omit_if_empty: None,
+		}
 	}
 }
 

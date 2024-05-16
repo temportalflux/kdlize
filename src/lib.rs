@@ -71,7 +71,10 @@ impl AsKdl for &str {
 		node
 	}
 }
-impl<S, Item: AsKdl> AsKdl for (S, Item) where S: AsRef<str> {
+impl<S, Item: AsKdl> AsKdl for (S, Item)
+where
+	S: AsRef<str>,
+{
 	fn as_kdl(&self) -> NodeBuilder {
 		let mut node = NodeBuilder::default();
 		node.entry(self.0.as_ref());

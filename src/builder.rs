@@ -1,4 +1,3 @@
-
 mod built_node;
 pub use built_node::*;
 
@@ -74,7 +73,10 @@ impl std::ops::AddAssign for NodeBuilder {
 	}
 }
 
-impl<TypeId> std::ops::AddAssign<(TypeId, Self)> for NodeBuilder where TypeId: Into<kdl::KdlIdentifier> {
+impl<TypeId> std::ops::AddAssign<(TypeId, Self)> for NodeBuilder
+where
+	TypeId: Into<kdl::KdlIdentifier>,
+{
 	fn add_assign(&mut self, (type_id, mut node): (TypeId, Self)) {
 		if let Some(entry) = node.entries.get_mut(0) {
 			entry.set_ty(type_id);
@@ -102,7 +104,10 @@ impl NodeBuilder {
 		}
 	}
 
-	pub fn with_type<TypeId>(mut self, ty: TypeId) -> Self where TypeId: Into<kdl::KdlIdentifier> {
+	pub fn with_type<TypeId>(mut self, ty: TypeId) -> Self
+	where
+		TypeId: Into<kdl::KdlIdentifier>,
+	{
 		self.set_type(Some(ty.into()));
 		self
 	}
@@ -364,14 +369,11 @@ mod test {
 		#[test]
 		fn nodes() {
 			let mut builder = NodeBuilder::default();
-			builder.children(vec![
-				BuiltNode::from(node_nonempty()),
-				BuiltNode::from(node_nonempty()),
-			]);
-			assert_eq!(builder.build(NODE_NAME), built_children(vec![
-				node_nonempty(),
-				node_nonempty(),
-			]));
+			builder.children(vec![BuiltNode::from(node_nonempty()), BuiltNode::from(node_nonempty())]);
+			assert_eq!(
+				builder.build(NODE_NAME),
+				built_children(vec![node_nonempty(), node_nonempty(),])
+			);
 		}
 
 		mod vec {
@@ -382,10 +384,7 @@ mod test {
 			}
 
 			fn expected() -> kdl::KdlNode {
-				built_children(vec![
-					node_empty(),
-					node_nonempty(),
-				])
+				built_children(vec![node_empty(), node_nonempty()])
 			}
 
 			#[test]
@@ -425,14 +424,11 @@ mod test {
 		}
 
 		mod map {
-			use std::collections::BTreeMap;
 			use super::*;
+			use std::collections::BTreeMap;
 
 			fn data() -> BTreeMap<&'static str, String> {
-				[
-					("empty", typed_empty()),
-					("nonempty", typed_nonempty()),
-				].into()
+				[("empty", typed_empty()), ("nonempty", typed_nonempty())].into()
 			}
 
 			fn expected() -> kdl::KdlNode {
@@ -479,7 +475,5 @@ mod test {
 				assert_eq!(builder.build(NODE_NAME), expected());
 			}
 		}
-
 	}
-
 }
