@@ -147,6 +147,11 @@ impl NodeBuilder {
 			self.child(built_node);
 		}
 	}
+
+	pub fn with(mut self, other: impl Into<Self>) -> Self {
+		self += other.into();
+		self
+	}
 }
 
 #[cfg(test)]
