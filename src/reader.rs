@@ -1,5 +1,5 @@
 use crate::{
-	error::{Error, InvalidQueryFormat, InvalidValueType, MissingEntryValue, NoChildren},
+	error::{Error, InvalidQueryFormat, InvalidValueType, MissingEntryValue, NoChildren, ParseError},
 	ext::{DocumentExt, DocumentQueryExt, EntryExt, NodeExt},
 	FromKdl,
 };
@@ -222,76 +222,68 @@ impl<'doc, Context> NodeReader<'doc, Context> {
 		Ok(self.peak_req()?.type_req()?)
 	}
 
-	pub fn next_str_opt_t<T>(&mut self) -> Result<Option<T>, anyhow::Error>
+	pub fn next_str_opt_t<T>(&mut self) -> Result<Option<T>, ParseError<T::Err>>
 	where
 		T: FromStr,
 		T::Err: std::error::Error + Send + Sync + 'static,
 	{
-		let Some(str) = self.next_str_opt()? else {
-			return Ok(None);
-		};
-		Ok(Some(T::from_str(str)?))
+		let res = self.next_str_opt().map_err(Error::from);
+		let Some(str) = res? else { return Ok(None) };
+		Ok(Some(T::from_str(str).map_err(ParseError::user)?))
 	}
 
-	pub fn next_str_req_t<T>(&mut self) -> Result<T, anyhow::Error>
+	pub fn next_str_req_t<T>(&mut self) -> Result<T, ParseError<T::Err>>
 	where
 		T: FromStr,
-		T::Err: Send + Sync + 'static,
-		anyhow::Error: From<T::Err>,
 	{
-		Ok(T::from_str(self.next_str_req()?)?)
+		Ok(T::from_str(self.next_str_req()?).map_err(ParseError::user)?)
 	}
 
-	pub fn get_str_opt_t<T>(&self, key: impl AsRef<str>) -> Result<Option<T>, anyhow::Error>
+	pub fn get_str_opt_t<T>(&self, key: impl AsRef<str>) -> Result<Option<T>, ParseError<T::Err>>
 	where
 		T: FromStr,
 		T::Err: std::error::Error + Send + Sync + 'static,
 	{
-		match self.get_str_opt(key)? {
-			None => Ok(None),
-			Some(str) => Ok(Some(T::from_str(str)?)),
-		}
+		let res = self.get_str_opt(key).map_err(Error::from);
+		let Some(str) = res? else { return Ok(None) };
+		Ok(Some(T::from_str(str).map_err(ParseError::user)?))
 	}
 
-	pub fn get_str_req_t<T>(&self, key: impl AsRef<str>) -> Result<T, anyhow::Error>
+	pub fn get_str_req_t<T>(&self, key: impl AsRef<str>) -> Result<T, ParseError<T::Err>>
 	where
 		T: FromStr,
 		T::Err: std::error::Error + Send + Sync + 'static,
 	{
-		Ok(T::from_str(self.get_str_req(key)?)?)
+		Ok(T::from_str(self.get_str_req(key)?).map_err(ParseError::user)?)
 	}
 
-	pub fn query_opt_t<T>(&self, query: impl AsRef<str>) -> Result<Option<T>, anyhow::Error>
+	pub fn query_opt_t<T>(&self, query: impl AsRef<str>) -> Result<Option<T>, ParseError<T::Error>>
 	where
 		T: FromKdl<Context>,
-		anyhow::Error: From<T::Error>,
 		Context: Clone,
 	{
-		let Some(mut node) = self.query_opt(query).map_err(Error::from)? else {
-			return Ok(None);
-		};
-		Ok(Some(T::from_kdl(&mut node)?))
+		let res = self.query_opt(query).map_err(Error::from);
+		let Some(mut node) = res? else { return Ok(None) };
+		Ok(Some(T::from_kdl(&mut node).map_err(ParseError::user)?))
 	}
 
-	pub fn query_req_t<T>(&self, query: impl AsRef<str>) -> Result<T, anyhow::Error>
+	pub fn query_req_t<T>(&self, query: impl AsRef<str>) -> Result<T, ParseError<T::Error>>
 	where
 		T: FromKdl<Context>,
-		anyhow::Error: From<T::Error>,
 		Context: Clone,
 	{
-		Ok(T::from_kdl(&mut self.query_req(query)?)?)
+		Ok(T::from_kdl(&mut self.query_req(query)?).map_err(ParseError::user)?)
 	}
 
-	pub fn query_all_t<T>(&self, query: impl kdl::IntoKdlQuery) -> Result<Vec<T>, anyhow::Error>
+	pub fn query_all_t<T>(&self, query: impl kdl::IntoKdlQuery) -> Result<Vec<T>, ParseError<T::Error>>
 	where
 		T: FromKdl<Context>,
-		anyhow::Error: From<T::Error>,
 		Context: Clone,
 	{
 		let nodes = self.query_all(query).map_err(Error::from)?;
 		let mut vec = Vec::with_capacity(nodes.len());
 		for mut node in nodes {
-			vec.push(T::from_kdl(&mut node)?);
+			vec.push(T::from_kdl(&mut node).map_err(ParseError::user)?);
 		}
 		Ok(vec)
 	}
@@ -300,7 +292,7 @@ impl<'doc, Context> NodeReader<'doc, Context> {
 		&self,
 		query: impl AsRef<str>,
 		key: impl Into<kdl::NodeKey>,
-	) -> Result<Option<T>, anyhow::Error>
+	) -> Result<Option<T>, ParseError<T::Err>>
 	where
 		T: FromStr,
 		T::Err: std::error::Error + Send + Sync + 'static,
@@ -308,15 +300,19 @@ impl<'doc, Context> NodeReader<'doc, Context> {
 		let Some(str) = self.query_str_opt(query, key)? else {
 			return Ok(None);
 		};
-		Ok(Some(T::from_str(str)?))
+		Ok(Some(T::from_str(str).map_err(ParseError::user)?))
 	}
 
-	pub fn query_str_req_t<T>(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<T, anyhow::Error>
+	pub fn query_str_req_t<T>(
+		&self,
+		query: impl AsRef<str>,
+		key: impl Into<kdl::NodeKey>,
+	) -> Result<T, ParseError<T::Err>>
 	where
 		T: FromStr,
 		T::Err: std::error::Error + Send + Sync + 'static,
 	{
-		Ok(T::from_str(self.query_str_req(query, key)?)?)
+		Ok(T::from_str(self.query_str_req(query, key)?).map_err(ParseError::user)?)
 	}
 }
 

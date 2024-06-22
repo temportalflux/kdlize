@@ -18,6 +18,33 @@ pub enum Error {
 	UserProvided(#[from] UserProvidedError),
 }
 
+#[derive(Debug, Clone)]
+pub enum ParseError<E> {
+	Native(Error),
+	User(E),
+}
+impl<E> From<Error> for ParseError<E> {
+	fn from(value: Error) -> Self {
+		Self::Native(value)
+	}
+}
+impl<E> ParseError<E> {
+	pub fn user(value: E) -> Self {
+		Self::User(value)
+	}
+}
+impl<E> From<ParseError<E>> for anyhow::Error
+where
+	anyhow::Error: From<E> + From<Error>,
+{
+	fn from(value: ParseError<E>) -> Self {
+		match value {
+			ParseError::Native(err) => Self::from(err),
+			ParseError::User(err) => Self::from(err),
+		}
+	}
+}
+
 #[derive(thiserror::Error, Debug, Clone)]
 #[error("Entry \"{0}\" is missing a type identifier")]
 pub struct MissingEntryType(pub kdl::KdlEntry);
