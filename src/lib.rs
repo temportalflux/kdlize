@@ -91,7 +91,7 @@ impl<V: AsKdl> AsKdl for &V {
 pub trait FromKdl<Context> {
 	type Error;
 
-	fn from_kdl<'doc>(node: &mut NodeReader<'doc, Context>) -> Result<Self, Self::Error>
+	fn from_kdl(node: &mut NodeReader<Context>) -> Result<Self, Self::Error>
 	where
 		Self: Sized;
 }
