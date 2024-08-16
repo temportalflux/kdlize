@@ -314,6 +314,24 @@ impl<'doc, Context> NodeReader<'doc, Context> {
 	{
 		Ok(T::from_str(self.query_str_req(query, key)?).map_err(ParseError::user)?)
 	}
+
+	pub fn query_str_all_t<T, C>(
+		&self,
+		query: impl AsRef<str>,
+		key: impl Into<kdl::NodeKey>,
+	) -> Result<C, ParseError<T::Err>>
+	where
+		T: FromStr,
+		T::Err: std::error::Error + Send + Sync + 'static,
+		C: FromIterator<T>,
+	{
+		let entries = self.query_str_all(query, key)?;
+		let mut vec = Vec::with_capacity(entries.len());
+		for str in entries {
+			vec.push(T::from_str(str).map_err(ParseError::user)?);
+		}
+		Ok(vec.into_iter().collect())
+	}
 }
 
 impl<'doc, Context> DocumentExt for NodeReader<'doc, Context> {
