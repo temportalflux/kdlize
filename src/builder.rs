@@ -4,7 +4,7 @@ pub use built_node::*;
 #[derive(Clone, Copy)]
 pub struct OmitIfEmpty;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct NodeBuilder {
 	entries: Vec<kdl::KdlEntry>,
 	children: Vec<kdl::KdlNode>,
