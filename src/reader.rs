@@ -1,15 +1,10 @@
-use crate::{
-	error::{Error, InvalidQueryFormat, InvalidValueType, MissingEntryValue, NoChildren, ParseError},
-	ext::{DocumentExt, DocumentQueryExt, EntryExt, NodeExt},
-	FromKdl,
-};
-use std::str::FromStr;
+use std::marker::PhantomData;
+use crate::{error::{MissingChild, MissingEntryValue, MissingTypedEntry, RequiredChild, RequiredValue}, FromKdlNode, FromKdlValue};
 
 pub struct NodeReader<'doc, Context> {
 	node: &'doc kdl::KdlNode,
-	ctx: Context,
-	index_cursor: usize,
-	is_root: bool,
+	ctx: &'doc Context,
+	entry_cursor: usize,
 }
 
 impl<'doc, Context> ToString for NodeReader<'doc, Context> {
@@ -19,33 +14,12 @@ impl<'doc, Context> ToString for NodeReader<'doc, Context> {
 }
 
 impl<'doc, Context> NodeReader<'doc, Context> {
-	pub fn new_root(node: &'doc kdl::KdlNode, ctx: Context) -> Self {
+	pub fn new(node: &'doc kdl::KdlNode, ctx: &'doc Context) -> Self {
 		Self {
 			node,
 			ctx,
-			index_cursor: 0,
-			is_root: true,
+			entry_cursor: 0,
 		}
-	}
-
-	pub fn new_child(node: &'doc kdl::KdlNode, ctx: Context) -> Self {
-		Self {
-			node,
-			ctx,
-			index_cursor: 0,
-			is_root: false,
-		}
-	}
-
-	fn next_node(&self, node: &'doc kdl::KdlNode) -> Self
-	where
-		Context: Clone,
-	{
-		Self::new_child(node, self.ctx.clone())
-	}
-
-	pub fn is_root(&self) -> bool {
-		self.is_root
 	}
 
 	pub fn context(&self) -> &Context {
@@ -60,317 +34,169 @@ impl<'doc, Context> NodeReader<'doc, Context> {
 		self.node.entries()
 	}
 
-	pub fn document_opt(&self) -> Option<&kdl::KdlDocument> {
+	pub fn document(&self) -> Option<&kdl::KdlDocument> {
 		self.node.children()
 	}
-
-	pub fn document_req(&self) -> Result<&kdl::KdlDocument, NoChildren> {
-		self.document_opt().ok_or(NoChildren(self.node.clone()))
-	}
-
-	pub fn children(&self) -> Option<Vec<Self>>
-	where
-		Context: Clone,
-	{
-		let Some(doc) = self.node.children() else {
-			return None;
-		};
-		Some(Self::iter_from(&self.ctx, doc.nodes().iter()))
-	}
-
-	fn iter_from(ctx: &Context, iter: impl Iterator<Item = &'doc kdl::KdlNode> + 'doc) -> Vec<Self>
-	where
-		Context: Clone,
-	{
-		iter.map(|node| Self::new_child(node, ctx.clone())).collect()
-	}
 }
 
 impl<'doc, Context> NodeReader<'doc, Context> {
-	fn peak_idx(&self) -> usize {
-		self.index_cursor
-	}
-
 	pub fn peak_opt(&self) -> Option<&'doc kdl::KdlEntry> {
-		self.node.entry_opt(self.peak_idx())
+		self.node.entry(self.entry_cursor)
 	}
+	
 	pub fn peak_req(&self) -> Result<&'doc kdl::KdlEntry, MissingEntryValue> {
-		self.node.entry_req(self.peak_idx())
-	}
-	pub fn peak_bool_opt(&self) -> Result<Option<bool>, InvalidValueType> {
-		self.node.get_bool_opt(self.peak_idx())
-	}
-	pub fn peak_i64_opt(&self) -> Result<Option<i64>, InvalidValueType> {
-		self.node.get_i64_opt(self.peak_idx())
-	}
-	pub fn peak_f64_opt(&self) -> Result<Option<f64>, InvalidValueType> {
-		self.node.get_f64_opt(self.peak_idx())
-	}
-	pub fn peak_str_opt(&self) -> Result<Option<&'doc str>, InvalidValueType> {
-		self.node.get_str_opt(self.peak_idx())
-	}
-	pub fn peak_bool_req(&self) -> Result<bool, Error> {
-		self.node.get_bool_req(self.peak_idx())
-	}
-	pub fn peak_i64_req(&self) -> Result<i64, Error> {
-		self.node.get_i64_req(self.peak_idx())
-	}
-	pub fn peak_f64_req(&self) -> Result<f64, Error> {
-		self.node.get_f64_req(self.peak_idx())
-	}
-	pub fn peak_str_req(&self) -> Result<&'doc str, Error> {
-		self.node.get_str_req(self.peak_idx())
-	}
-}
-
-impl<'doc, Context> NodeReader<'doc, Context> {
-	fn consume_idx(&mut self) -> usize {
-		let consumed = self.index_cursor;
-		self.index_cursor += 1;
-		consumed
+		self.peak_opt().ok_or_else(|| MissingEntryValue::new_index(self.node.clone(), self.entry_cursor))
 	}
 
-	pub fn next_opt(&mut self) -> Option<&'doc kdl::KdlEntry> {
-		self.node.entry_opt(self.consume_idx())
-	}
-	pub fn next_req(&mut self) -> Result<&'doc kdl::KdlEntry, MissingEntryValue> {
-		self.node.entry_req(self.consume_idx())
-	}
-	pub fn next_bool_opt(&mut self) -> Result<Option<bool>, InvalidValueType> {
-		self.node.get_bool_opt(self.consume_idx())
-	}
-	pub fn next_i64_opt(&mut self) -> Result<Option<i64>, InvalidValueType> {
-		self.node.get_i64_opt(self.consume_idx())
-	}
-	pub fn next_f64_opt(&mut self) -> Result<Option<f64>, InvalidValueType> {
-		self.node.get_f64_opt(self.consume_idx())
-	}
-	pub fn next_str_opt(&mut self) -> Result<Option<&'doc str>, InvalidValueType> {
-		self.node.get_str_opt(self.consume_idx())
-	}
-	pub fn next_bool_req(&mut self) -> Result<bool, Error> {
-		self.node.get_bool_req(self.consume_idx())
-	}
-	pub fn next_i64_req(&mut self) -> Result<i64, Error> {
-		self.node.get_i64_req(self.consume_idx())
-	}
-	pub fn next_f64_req(&mut self) -> Result<f64, Error> {
-		self.node.get_f64_req(self.consume_idx())
-	}
-	pub fn next_str_req(&mut self) -> Result<&'doc str, Error> {
-		self.node.get_str_req(self.consume_idx())
-	}
-}
-
-impl<'doc, Context> NodeReader<'doc, Context> {
-	pub fn get_opt(&self, key: impl AsRef<str>) -> Option<&'doc kdl::KdlEntry> {
-		self.node.entry_opt(key.as_ref())
-	}
-	pub fn get_req(&self, key: impl AsRef<str>) -> Result<&'doc kdl::KdlEntry, MissingEntryValue> {
-		self.node.entry_req(key.as_ref())
-	}
-	pub fn get_bool_opt(&self, key: impl AsRef<str>) -> Result<Option<bool>, InvalidValueType> {
-		self.node.get_bool_opt(key.as_ref())
-	}
-	pub fn get_i64_opt(&self, key: impl AsRef<str>) -> Result<Option<i64>, InvalidValueType> {
-		self.node.get_i64_opt(key.as_ref())
-	}
-	pub fn get_f64_opt(&self, key: impl AsRef<str>) -> Result<Option<f64>, InvalidValueType> {
-		self.node.get_f64_opt(key.as_ref())
-	}
-	pub fn get_str_opt(&self, key: impl AsRef<str>) -> Result<Option<&'doc str>, InvalidValueType> {
-		self.node.get_str_opt(key.as_ref())
-	}
-	pub fn get_bool_req(&self, key: impl AsRef<str>) -> Result<bool, Error> {
-		self.node.get_bool_req(key.as_ref())
-	}
-	pub fn get_i64_req(&self, key: impl AsRef<str>) -> Result<i64, Error> {
-		self.node.get_i64_req(key.as_ref())
-	}
-	pub fn get_f64_req(&self, key: impl AsRef<str>) -> Result<f64, Error> {
-		self.node.get_f64_req(key.as_ref())
-	}
-	pub fn get_str_req(&self, key: impl AsRef<str>) -> Result<&'doc str, Error> {
-		self.node.get_str_req(key.as_ref())
-	}
-}
-
-impl<'doc, Context> NodeReader<'doc, Context>
-where
-	Context: Clone,
-{
-	pub fn query_opt(&self, query: impl AsRef<str>) -> Result<Option<Self>, InvalidQueryFormat> {
-		Ok(self.node.query_opt(query)?.map(|node| self.next_node(node)))
-	}
-	pub fn query_req(&self, query: impl AsRef<str>) -> Result<Self, Error> {
-		Ok(self.next_node(self.node.query_req(query)?))
-	}
-	pub fn query_all(&self, query: impl kdl::IntoKdlQuery) -> Result<Vec<Self>, InvalidQueryFormat> {
-		Ok(Self::iter_from(&self.ctx, self.node.query_all(query)?))
-	}
-	pub fn query_get_all(
-		&self,
-		query: impl kdl::IntoKdlQuery,
-		key: impl Into<kdl::NodeKey>,
-	) -> Result<impl Iterator<Item = &kdl::KdlValue>, InvalidQueryFormat> {
-		self.node.query_get_all(query, key).map_err(|e| InvalidQueryFormat(e))
-	}
-}
-
-impl<'doc, Context> NodeReader<'doc, Context> {
-	pub fn peak_type_req(&self) -> Result<&str, Error> {
+	pub fn peak_req_ty(&self) -> Result<&str, MissingTypedEntry> {
+		use crate::ext::EntryExt;
 		Ok(self.peak_req()?.type_req()?)
 	}
 
-	pub fn next_str_opt_t<T>(&mut self) -> Result<Option<T>, ParseError<T::Err>>
-	where
-		T: FromStr,
-		T::Err: std::error::Error + Send + Sync + 'static,
-	{
-		let res = self.next_str_opt().map_err(Error::from);
-		let Some(str) = res? else { return Ok(None) };
-		Ok(Some(T::from_str(str).map_err(ParseError::user)?))
+	fn increment_cursor(&mut self) -> usize {
+		let consumed = self.entry_cursor;
+		self.entry_cursor += 1;
+		consumed
 	}
 
-	pub fn next_str_req_t<T>(&mut self) -> Result<T, ParseError<T::Err>>
-	where
-		T: FromStr,
-	{
-		Ok(T::from_str(self.next_str_req()?).map_err(ParseError::user)?)
+	fn next_entry(&mut self) -> Option<&'doc kdl::KdlEntry> {
+		self.node.entry(self.increment_cursor())
 	}
 
-	pub fn get_str_opt_t<T>(&self, key: impl AsRef<str>) -> Result<Option<T>, ParseError<T::Err>>
-	where
-		T: FromStr,
-		T::Err: std::error::Error + Send + Sync + 'static,
-	{
-		let res = self.get_str_opt(key).map_err(Error::from);
-		let Some(str) = res? else { return Ok(None) };
-		Ok(Some(T::from_str(str).map_err(ParseError::user)?))
+	pub fn next_opt<V: FromKdlValue<'doc>>(&mut self) -> Result<Option<V>, V::Error> {
+		let Some(entry) = self.next_entry() else { return Ok(None) };
+		Ok(Some(V::from_kdl(entry.value())?))
 	}
 
-	pub fn get_str_req_t<T>(&self, key: impl AsRef<str>) -> Result<T, ParseError<T::Err>>
-	where
-		T: FromStr,
-		T::Err: std::error::Error + Send + Sync + 'static,
-	{
-		Ok(T::from_str(self.get_str_req(key)?).map_err(ParseError::user)?)
-	}
-
-	pub fn query_opt_t<T>(&self, query: impl AsRef<str>) -> Result<Option<T>, ParseError<T::Error>>
-	where
-		T: FromKdl<Context>,
-		Context: Clone,
-	{
-		let res = self.query_opt(query).map_err(Error::from);
-		let Some(mut node) = res? else { return Ok(None) };
-		Ok(Some(T::from_kdl(&mut node).map_err(ParseError::user)?))
-	}
-
-	pub fn query_req_t<T>(&self, query: impl AsRef<str>) -> Result<T, ParseError<T::Error>>
-	where
-		T: FromKdl<Context>,
-		Context: Clone,
-	{
-		Ok(T::from_kdl(&mut self.query_req(query)?).map_err(ParseError::user)?)
-	}
-
-	pub fn query_all_t<T>(&self, query: impl kdl::IntoKdlQuery) -> Result<Vec<T>, ParseError<T::Error>>
-	where
-		T: FromKdl<Context>,
-		Context: Clone,
-	{
-		let nodes = self.query_all(query).map_err(Error::from)?;
-		let mut vec = Vec::with_capacity(nodes.len());
-		for mut node in nodes {
-			vec.push(T::from_kdl(&mut node).map_err(ParseError::user)?);
+	pub fn next_req<V: FromKdlValue<'doc>>(&mut self) -> Result<V, RequiredValue<V::Error>> {
+		let idx = self.entry_cursor;
+		match self.next_opt::<V>() {
+			Err(err) => Err(err.into()),
+			Ok(Some(value)) => Ok(value),
+			Ok(None) => Err(RequiredValue::Missing(MissingEntryValue::new_index(self.node.clone(), idx))),
 		}
-		Ok(vec)
 	}
 
-	pub fn query_str_opt_t<T>(
-		&self,
-		query: impl AsRef<str>,
-		key: impl Into<kdl::NodeKey>,
-	) -> Result<Option<T>, ParseError<T::Err>>
-	where
-		T: FromStr,
-		T::Err: std::error::Error + Send + Sync + 'static,
-	{
-		let Some(str) = self.query_str_opt(query, key)? else {
-			return Ok(None);
-		};
-		Ok(Some(T::from_str(str).map_err(ParseError::user)?))
+	fn prop(&self, key: impl AsRef<str>) -> Option<&'doc kdl::KdlEntry> {
+		self.node.entry(key.as_ref())
 	}
 
-	pub fn query_str_req_t<T>(
-		&self,
-		query: impl AsRef<str>,
-		key: impl Into<kdl::NodeKey>,
-	) -> Result<T, ParseError<T::Err>>
-	where
-		T: FromStr,
-		T::Err: std::error::Error + Send + Sync + 'static,
-	{
-		Ok(T::from_str(self.query_str_req(query, key)?).map_err(ParseError::user)?)
+	pub fn prop_opt<V: FromKdlValue<'doc>>(&mut self, key: impl AsRef<str>) -> Result<Option<V>, V::Error> {
+		let Some(entry) = self.prop(key) else { return Ok(None) };
+		Ok(Some(V::from_kdl(entry.value())?))
 	}
 
-	pub fn query_str_all_t<T, C>(
-		&self,
-		query: impl AsRef<str>,
-		key: impl Into<kdl::NodeKey>,
-	) -> Result<C, ParseError<T::Err>>
-	where
-		T: FromStr,
-		T::Err: std::error::Error + Send + Sync + 'static,
-		C: FromIterator<T>,
-	{
-		let entries = self.query_str_all(query, key)?;
-		let mut vec = Vec::with_capacity(entries.len());
-		for str in entries {
-			vec.push(T::from_str(str).map_err(ParseError::user)?);
+	pub fn prop_req<V: FromKdlValue<'doc>>(&mut self, key: impl AsRef<str>) -> Result<V, RequiredValue<V::Error>> {
+		match self.prop_opt::<V>(key.as_ref()) {
+			Err(err) => Err(err.into()),
+			Ok(Some(value)) => Ok(value),
+			Ok(None) => Err(RequiredValue::Missing(MissingEntryValue::new_prop(self.node.clone(), key))),
 		}
-		Ok(vec.into_iter().collect())
+	}
+
+	pub fn iter_children(&'doc self, key: &'static str) -> IterChildNodesWithName<'doc, Context> {
+		IterChildNodesWithName(IterChildNodes(self, 0), key)
+	}
+
+	pub fn child_opt(&'doc self, key: &'static str) -> Option<Self> {
+		self.iter_children(key).next()
+	}
+
+	pub fn child_req(&'doc self, key: &'static str) -> Result<Self, MissingChild> {
+		self.child_opt(key).ok_or_else(|| MissingChild(self.node.clone(), key))
+	}
+}
+impl<'doc, Context> NodeReader<'doc, Context> {
+	pub fn iter_children_t<T>(&'doc self, key: &'static str) -> IterChildNodesWithNameTyped<'doc, Context, T> where T: FromKdlNode<Context> {
+		IterChildNodesWithNameTyped::<'doc, Context, T>(self.iter_children(key), PhantomData::<T>)
+	}
+
+	pub fn children_t<T>(&'doc self, key: &'static str) -> Result<Vec<T>, T::Error> where T: FromKdlNode<Context> {
+		let mut children = Vec::new();
+		for child in self.iter_children_t::<T>(key) {
+			children.push(child?);
+		}
+		Ok(children)
+	}
+
+	pub fn child_opt_t<T>(&'doc self, key: &'static str) -> Result<Option<T>, T::Error> where T: FromKdlNode<Context> {
+		self.iter_children_t::<T>(key).next().transpose()
+	}
+
+	pub fn child_req_t<T>(&'doc self, key: &'static str) -> Result<T, RequiredChild<T::Error>> where T: FromKdlNode<Context> {
+		let child_opt = self.iter_children_t::<T>(key).next();
+		let child_opt = child_opt.transpose()?;
+		child_opt.ok_or_else(|| RequiredChild::Missing(MissingChild(self.node.clone(), key)))
 	}
 }
 
-impl<'doc, Context> DocumentExt for NodeReader<'doc, Context> {
-	fn query_bool_opt(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Option<bool>, Error> {
-		self.node.query_bool_opt(query, key)
+pub struct IterChildNodes<'doc, Context>(&'doc NodeReader<'doc, Context>, usize);
+impl<'doc, Context> Iterator for IterChildNodes<'doc, Context> {
+	type Item = NodeReader<'doc, Context>;
+	fn next(&mut self) -> Option<Self::Item> {
+		let document = self.0.document()?;
+		let node = document.nodes().get(self.1)?;
+		self.1 += 1;
+		Some(NodeReader::<'doc, Context>::new(node, &self.0.ctx))
 	}
-	fn query_i64_opt(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Option<i64>, Error> {
-		self.node.query_i64_opt(query, key)
+}
+
+pub struct IterChildNodesWithName<'doc, Context>(IterChildNodes<'doc, Context>, &'static str);
+impl<'doc, Context> Iterator for IterChildNodesWithName<'doc, Context> {
+	type Item = NodeReader<'doc, Context>;
+	fn next(&mut self) -> Option<Self::Item> {
+		while let Some(reader) = self.0.next() {
+			if reader.node.name().value() == self.1 {
+				return Some(reader);
+			}
+		}
+		None
 	}
-	fn query_f64_opt(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Option<f64>, Error> {
-		self.node.query_f64_opt(query, key)
+}
+
+pub struct IterChildNodesWithNameTyped<'doc, Context, T: FromKdlNode<Context>>(IterChildNodesWithName<'doc, Context>, PhantomData<T>);
+impl<'doc, Context, T> Iterator for IterChildNodesWithNameTyped<'doc, Context, T> where T: FromKdlNode<Context> {
+	type Item = Result<T, T::Error>;
+	fn next(&mut self) -> Option<Self::Item> {
+		Some(T::from_kdl(&mut self.0.next()?))
 	}
-	fn query_str_opt(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Option<&str>, Error> {
-		self.node.query_str_opt(query, key)
+}
+
+#[cfg(test)]
+mod test {
+  use super::*;
+
+	#[test]
+	fn next() -> Result<(), anyhow::Error> {
+		let node = kdl::KdlNode::parse("node value1 2 \"value 3\" key=#true")?;
+		let mut reader = NodeReader::new(&node, &());
+		assert_eq!(reader.next_req::<&str>()?, "value1");
+		assert_eq!(reader.next_req::<u32>()?, 2u32);
+		assert_eq!(reader.next_req::<&str>()?, "value 3");
+		Ok(())
 	}
 
-	fn query_bool_req(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<bool, Error> {
-		self.node.query_bool_req(query, key)
-	}
-	fn query_i64_req(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<i64, Error> {
-		self.node.query_i64_req(query, key)
-	}
-	fn query_f64_req(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<f64, Error> {
-		self.node.query_f64_req(query, key)
-	}
-	fn query_str_req(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<&str, Error> {
-		self.node.query_str_req(query, key)
+	#[test]
+	fn get() -> Result<(), anyhow::Error> {
+		let node = kdl::KdlNode::parse("node value1 2 \"value 3\" key=#true")?;
+		let mut reader = NodeReader::new(&node, &());
+		assert_eq!(reader.prop_req::<bool>("key")?, true);
+		Ok(())
 	}
 
-	fn query_bool_all(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Vec<bool>, Error> {
-		self.node.query_bool_all(query, key)
-	}
-	fn query_i64_all(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Vec<i64>, Error> {
-		self.node.query_i64_all(query, key)
-	}
-	fn query_f64_all(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Vec<f64>, Error> {
-		self.node.query_f64_all(query, key)
-	}
-	fn query_str_all(&self, query: impl AsRef<str>, key: impl Into<kdl::NodeKey>) -> Result<Vec<&str>, Error> {
-		self.node.query_str_all(query, key)
+	#[test]
+	fn children() -> Result<(), anyhow::Error> {
+		let node = kdl::KdlNode::parse("root {\nc1 \"yes 1\"\nc2 \"no\"\nc1 \"yes 2\"}")?;
+		let reader = NodeReader::new(&node, &());
+		let child_nodes = reader.iter_children("c1").map(|reader| reader.to_string()).collect::<Vec<_>>();
+		assert_eq!(child_nodes, vec![
+			"c1 \"yes 1\"\n".to_owned(),
+			"c1 \"yes 2\"".to_owned(),
+		]);
+		let child_nodes = reader.iter_children("c2").map(|reader| reader.to_string()).collect::<Vec<_>>();
+		assert_eq!(child_nodes, vec![
+			"c2 \"no\"\n".to_owned(),
+		]);
+		Ok(())
 	}
 }

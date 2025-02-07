@@ -5,6 +5,7 @@ pub mod error;
 pub mod ext;
 
 mod reader;
+use error::ValueTypeMismatch;
 pub use reader::*;
 
 pub trait NodeId {
@@ -30,126 +31,189 @@ macro_rules! impl_kdl_node {
 	};
 }
 
-pub trait AsKdl {
-	fn as_kdl(&self) -> NodeBuilder;
-}
-macro_rules! impl_askdl_entry {
-	($target:ty, $map:expr) => {
-		impl AsKdl for $target {
-			fn as_kdl(&self) -> NodeBuilder {
-				NodeBuilder::default().with_entry(($map)(*self))
-			}
-		}
-	};
-}
-impl_askdl_entry!(bool, |v| v);
-impl_askdl_entry!(u8, |v| v as i64);
-impl_askdl_entry!(i8, |v| v as i64);
-impl_askdl_entry!(u16, |v| v as i64);
-impl_askdl_entry!(i16, |v| v as i64);
-impl_askdl_entry!(u32, |v| v as i64);
-impl_askdl_entry!(i32, |v| v as i64);
-impl_askdl_entry!(u64, |v| v as i64);
-impl_askdl_entry!(i64, |v| v);
-impl_askdl_entry!(u128, |v| v as i64);
-impl_askdl_entry!(i128, |v| v as i64);
-impl_askdl_entry!(usize, |v| v as i64);
-impl_askdl_entry!(isize, |v| v as i64);
-impl_askdl_entry!(f32, |v| v as f64);
-impl_askdl_entry!(f64, |v| v);
-impl AsKdl for String {
-	fn as_kdl(&self) -> NodeBuilder {
-		self.as_str().as_kdl()
-	}
-}
-impl AsKdl for &str {
-	fn as_kdl(&self) -> NodeBuilder {
-		let mut node = NodeBuilder::default();
-		if !self.is_empty() {
-			node.entry(self.to_owned());
-		}
-		node
-	}
-}
-impl<S, Item: AsKdl> AsKdl for (S, Item)
-where
-	S: AsRef<str>,
-{
-	fn as_kdl(&self) -> NodeBuilder {
-		let mut node = NodeBuilder::default();
-		node.entry(self.0.as_ref());
-		node += self.1.as_kdl();
-		node
-	}
-}
-impl<V: AsKdl> AsKdl for &V {
-	fn as_kdl(&self) -> NodeBuilder {
-		(*self).as_kdl()
-	}
-}
-
-pub trait FromKdl<Context> {
+pub trait FromKdlValue<'value> {
 	type Error;
-
-	fn from_kdl(node: &mut NodeReader<Context>) -> Result<Self, Self::Error>
+	fn from_kdl(value: &'value kdl::KdlValue) -> Result<Self, Self::Error>
 	where
 		Self: Sized;
 }
 
-macro_rules! impl_fromkdl {
-	($target:ty, $method:ident, $map:expr) => {
-		impl<Context> FromKdl<Context> for $target {
-			type Error = crate::error::Error;
-			fn from_kdl<'doc>(node: &mut NodeReader<'doc, Context>) -> Result<Self, Self::Error> {
-				Ok(node.$method().map($map)?)
+pub trait AsKdlValue {
+	fn as_kdl(&self) -> kdl::KdlValue;
+}
+impl<V> AsKdlValue for &V where V: AsKdlValue {
+	fn as_kdl(&self) -> kdl::KdlValue {
+		V::as_kdl(self)
+	}
+}
+
+impl<'value> FromKdlValue<'value> for &'value str {
+	type Error = ValueTypeMismatch;
+	fn from_kdl(value: &'value kdl::KdlValue) -> Result<Self, Self::Error> {
+		match value {
+			kdl::KdlValue::String(value) => Ok(value.as_str()),
+			_ => Err(ValueTypeMismatch::new(&value, "String")),
+		}
+	}
+}
+impl AsKdlValue for str {
+	fn as_kdl(&self) -> kdl::KdlValue {
+		kdl::KdlValue::String(self.to_owned())
+	}
+}
+impl AsKdlValue for &str {
+	fn as_kdl(&self) -> kdl::KdlValue {
+		str::as_kdl(self)
+	}
+}
+impl AsKdlValue for String {
+	fn as_kdl(&self) -> kdl::KdlValue {
+		kdl::KdlValue::String(self.clone())
+	}
+}
+
+// Implements FromKdlValue and AsKdlValue for the provided type,
+// such that the expected value is a string, and the provided type is parsed to/from a string using FromStr/ToString.
+#[macro_export]
+macro_rules! impl_kdlvalue_str {
+	($target:ty) => {
+		impl<'value> $crate::FromKdlValue<'value> for $target where $target: std::str::FromStr {
+			type Error = $crate::error::ParseValueFromStr<<$target as std::str::FromStr>::Err>;
+			fn from_kdl(value: &kdl::KdlValue) -> Result<Self, Self::Error> {
+				let value = <&str as $crate::FromKdlValue>::from_kdl(value)?;
+				let result = <$target as std::str::FromStr>::from_str(value);
+				let result = result.map_err(|err| $crate::error::ParseValueFromStr::FailedToInterpret(err));
+				Ok(result?)
+			}
+		}
+		impl $crate::AsKdlValue for $target where $target: ToString {
+			fn as_kdl(&self) -> kdl::KdlValue {
+				kdl::KdlValue::String(self.to_string())
 			}
 		}
 	};
 }
-impl_fromkdl!(bool, next_bool_req, |v| v);
-impl_fromkdl!(u8, next_i64_req, |v| v as u8);
-impl_fromkdl!(i8, next_i64_req, |v| v as i8);
-impl_fromkdl!(u16, next_i64_req, |v| v as u16);
-impl_fromkdl!(i16, next_i64_req, |v| v as i16);
-impl_fromkdl!(u32, next_i64_req, |v| v as u32);
-impl_fromkdl!(i32, next_i64_req, |v| v as i32);
-impl_fromkdl!(u64, next_i64_req, |v| v as u64);
-impl_fromkdl!(i64, next_i64_req, |v| v);
-impl_fromkdl!(u128, next_i64_req, |v| v as u128);
-impl_fromkdl!(i128, next_i64_req, |v| v as i128);
-impl_fromkdl!(usize, next_i64_req, |v| v as usize);
-impl_fromkdl!(isize, next_i64_req, |v| v as isize);
-impl_fromkdl!(f32, next_f64_req, |v| v as f32);
-impl_fromkdl!(f64, next_f64_req, |v| v);
-impl<Context> FromKdl<Context> for String {
-	type Error = crate::error::Error;
-	fn from_kdl<'doc>(node: &mut NodeReader<'doc, Context>) -> Result<Self, Self::Error> {
-		Ok(node.next_str_req()?.to_string())
+
+#[cfg(test)]
+mod test {
+	struct ExampleStr;
+	impl std::str::FromStr for ExampleStr {
+		type Err = ();
+		fn from_str(_s: &str) -> Result<Self, Self::Err> {
+			Ok(Self)
+		}
+	}
+	impl std::fmt::Display for ExampleStr {
+		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+			write!(f, "Example")
+		}
+	}
+	impl_kdlvalue_str!(ExampleStr);
+}
+
+macro_rules! impl_kdlvalue_primitive {
+	($target:ty, $actual:ty) => {
+		impl<'value> FromKdlValue<'value> for $target {
+			type Error = ValueTypeMismatch;
+			fn from_kdl(value: &kdl::KdlValue) -> Result<Self, Self::Error> {
+				Ok(<$actual>::from_kdl(value)? as $target)
+			}
+		}
+		impl AsKdlValue for $target {
+			fn as_kdl(&self) -> kdl::KdlValue {
+				(*self as $actual).as_kdl()
+			}
+		}
+	};
+}
+
+impl<'value> FromKdlValue<'value> for i128 {
+	type Error = ValueTypeMismatch;
+	fn from_kdl(value: &kdl::KdlValue) -> Result<Self, Self::Error> {
+		match value {
+			kdl::KdlValue::Integer(value) => Ok(*value),
+			_ => Err(ValueTypeMismatch::new(&value, "Integer")),
+		}
 	}
 }
-impl<Item, Context> FromKdl<Context> for (String, Item)
-where
-	Item: FromKdl<Context>,
-	Item::Error: From<crate::error::Error>,
-{
-	type Error = Item::Error;
-	fn from_kdl<'doc>(node: &mut NodeReader<'doc, Context>) -> Result<Self, Self::Error> {
-		let name = node.next_str_req()?.to_owned();
-		let item = Item::from_kdl(node)?;
-		Ok((name, item))
+impl AsKdlValue for i128 {
+	fn as_kdl(&self) -> kdl::KdlValue {
+		kdl::KdlValue::Integer(*self)
+	}
+}
+impl_kdlvalue_primitive!(u8,    i128);
+impl_kdlvalue_primitive!(i8,    i128);
+impl_kdlvalue_primitive!(u16,   i128);
+impl_kdlvalue_primitive!(i16,   i128);
+impl_kdlvalue_primitive!(u32,   i128);
+impl_kdlvalue_primitive!(i32,   i128);
+impl_kdlvalue_primitive!(u64,   i128);
+impl_kdlvalue_primitive!(i64,   i128);
+impl_kdlvalue_primitive!(u128,  i128);
+//impl_kdlvalue_primitive!(i128,  i128);
+impl_kdlvalue_primitive!(usize, i128);
+impl_kdlvalue_primitive!(isize, i128);
+
+impl<'value> FromKdlValue<'value> for f64 {
+	type Error = ValueTypeMismatch;
+	fn from_kdl(value: &kdl::KdlValue) -> Result<Self, Self::Error> {
+		match value {
+			kdl::KdlValue::Float(value) => Ok(*value),
+			_ => Err(ValueTypeMismatch::new(&value, "Float")),
+		}
+	}
+}
+impl AsKdlValue for f64 {
+	fn as_kdl(&self) -> kdl::KdlValue {
+		kdl::KdlValue::Float(*self)
+	}
+}
+impl_kdlvalue_primitive!(f32,   f64);
+//impl_kdlvalue_primitive!(f64,   f64);
+
+impl<'value> FromKdlValue<'value> for bool {
+	type Error = ValueTypeMismatch;
+	fn from_kdl(value: &kdl::KdlValue) -> Result<Self, Self::Error> {
+		match value {
+			kdl::KdlValue::Bool(value) => Ok(*value),
+			_ => Err(ValueTypeMismatch::new(&value, "Bool")),
+		}
+	}
+}
+impl AsKdlValue for bool {
+	fn as_kdl(&self) -> kdl::KdlValue {
+		kdl::KdlValue::Bool(*self)
 	}
 }
 
-impl<T, Context> FromKdl<Context> for Option<T>
-where
-	T: FromKdl<Context>,
-{
-	type Error = T::Error;
-	fn from_kdl<'doc>(node: &mut NodeReader<'doc, Context>) -> Result<Self, Self::Error> {
-		// Instead of consuming the next-idx, just peek to see if there is a value there or not.
-		match node.peak_opt() {
-			Some(_) => T::from_kdl(node).map(|v| Some(v)),
-			None => Ok(None),
+impl<V> AsKdlValue for Option<V> where V: AsKdlValue {
+	fn as_kdl(&self) -> kdl::KdlValue {
+		match self {
+			None => kdl::KdlValue::Null,
+			Some(value) => value.as_kdl(),
+		}
+	}
+}
+
+pub trait FromKdlNode<Context> {
+	type Error;
+	fn from_kdl(node: &mut NodeReader<Context>) -> Result<Self, Self::Error>
+	where
+		Self: Sized;
+}
+pub trait AsKdlNode {
+	fn as_kdl(&self) -> NodeBuilder;
+}
+impl<V: AsKdlNode> AsKdlNode for &V {
+	fn as_kdl(&self) -> NodeBuilder {
+		(*self).as_kdl()
+	}
+}
+impl<V: AsKdlNode> AsKdlNode for Option<V> {
+	fn as_kdl(&self) -> NodeBuilder {
+		match self {
+			None => NodeBuilder::default(),
+			Some(value) => value.as_kdl(),
 		}
 	}
 }
