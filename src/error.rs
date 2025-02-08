@@ -1,6 +1,25 @@
+#[derive(thiserror::Error, Debug, PartialEq)]
+pub enum QueryError {
+	#[error(transparent)]
+	MissingValue(#[from] MissingEntryValue),
+	#[error(transparent)]
+	MissingType(#[from] MissingEntryType),
+	#[error(transparent)]
+	ValueTypeMismatch(#[from] ValueTypeMismatch),
+	#[error(transparent)]
+	MissingChild(#[from] MissingChild),
+}
+impl From<RequiredValue<ValueTypeMismatch>> for QueryError {
+	fn from(value: RequiredValue<ValueTypeMismatch>) -> Self {
+		match value {
+			RequiredValue::Missing(missing) => Self::MissingValue(missing),
+			RequiredValue::Parse(mismatch) => Self::ValueTypeMismatch(mismatch),
+		}
+	}
+}
 
 /// The node is missing an entry that was required.
-#[derive(thiserror::Error, Debug, Clone)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq)]
 pub struct MissingEntryValue(kdl::KdlNode, kdl::NodeKey);
 impl MissingEntryValue {
 	pub(crate) fn new_index(node: kdl::KdlNode, idx: usize) -> Self {
@@ -21,13 +40,13 @@ impl std::fmt::Display for MissingEntryValue {
 	}
 }
 
-#[derive(thiserror::Error, Debug, Clone)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq)]
 #[error("Entry \"{0}\" is missing a type identifier")]
 pub struct MissingEntryType(pub(crate) kdl::KdlEntry);
 
-#[derive(thiserror::Error, Debug, Clone)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq)]
 #[error("Node {0} is missing a child node with name \"{1}\"")]
-pub struct MissingChild(pub(crate) kdl::KdlNode, pub(crate) &'static str);
+pub struct MissingChild(pub(crate) kdl::KdlNode, pub(crate) kdl::KdlIdentifier);
 
 #[derive(thiserror::Error, Debug)]
 pub enum MissingTypedEntry {
@@ -37,15 +56,15 @@ pub enum MissingTypedEntry {
 	MissingType(#[from] MissingEntryType),
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq)]
 pub enum RequiredValue<E> {
 	#[error(transparent)]
 	Missing(MissingEntryValue),
 	#[error(transparent)]
-	Parse(#[from] E),
+	Parse(E),
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq)]
 pub enum RequiredChild<E> {
 	#[error(transparent)]
 	Missing(MissingChild),
@@ -63,7 +82,7 @@ pub enum ParseValueFromStr<TError> {
 	FailedToInterpret(TError),
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq)]
 #[error("Expected '{2}' to be a '{0}', but it is a '{1}'.")]
 pub struct ValueTypeMismatch(&'static str, &'static str, kdl::KdlValue);
 impl ValueTypeMismatch {
