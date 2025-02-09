@@ -18,6 +18,8 @@ impl From<RequiredValue<ValueTypeMismatch>> for QueryError {
 	}
 }
 
+pub type MissingEntry = MissingEntryValue;
+
 /// The node is missing an entry that was required.
 #[derive(thiserror::Error, Debug, Clone, PartialEq)]
 pub struct MissingEntryValue(kdl::KdlNode, kdl::NodeKey);
