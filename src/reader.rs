@@ -83,12 +83,14 @@ impl<'doc, Context> Node<'doc, Context> {
 		entry.ok_or_else(|| crate::error::MissingEntry::new_prop(self.node.clone(), key))
 	}
 
-	pub fn iter_children(&self) -> IterChildNodes<'_, 'doc, Context> {
-		IterChildNodes(self, 0)
+	pub fn iter_children(&self) -> IterChildNodes<IterDocumentNodes<'doc>, &'doc Context> {
+		let iter_doc = self.document().map(|doc| IterDocumentNodes(doc, 0));
+		IterChildNodes(iter_doc, &self.ctx)
 	}
 
-	pub fn children(&self, name: impl Into<kdl::KdlIdentifier>) -> IterChildNodesWithName<'_, 'doc, Context> {
-		IterChildNodesWithName(IterChildNodes(self, 0), name.into())
+	pub fn children(&self, name: impl Into<kdl::KdlIdentifier>) -> IterChildNodes<IterDocumentNodesWithName<'doc>, &'doc Context> {
+		let iter_doc = self.document().map(|doc| IterDocumentNodesWithName(IterDocumentNodes(doc, 0), name.into()));
+		IterChildNodes(iter_doc, &self.ctx)
 	}
 
 	pub fn child(&self, key: impl Into<kdl::KdlIdentifier>) -> Result<Self, crate::error::MissingChild> {
@@ -102,41 +104,87 @@ impl<'doc, Context> Node<'doc, Context> {
 	}
 }
 
-pub struct IterChildNodes<'reader, 'doc, Context>(&'reader Node<'doc, Context>, usize);
-impl<'reader, 'doc, Context> Iterator for IterChildNodes<'reader, 'doc, Context> {
-	type Item = Node<'doc, Context>;
+pub struct IterDocumentNodes<'doc>(&'doc kdl::KdlDocument, usize);
+impl<'doc> IterDocumentNodes<'doc> {
+	pub fn opt(doc: Option<&'doc kdl::KdlDocument>) -> Option<Self> {
+		doc.map(|doc| Self(doc, 0))
+	}
+}
+impl<'doc> Iterator for IterDocumentNodes<'doc> {
+	type Item = &'doc kdl::KdlNode;
 	fn next(&mut self) -> Option<Self::Item> {
-		let document = self.0.document()?;
-		let node = document.nodes().get(self.1)?;
+		let node = self.0.nodes().get(self.1)?;
 		self.1 += 1;
-		Some(Node::<'doc, Context>::new(node, &self.0.ctx))
+		Some(node)
 	}
 }
 
-pub struct IterChildNodesWithName<'reader, 'doc, Context>(IterChildNodes<'reader, 'doc, Context>, kdl::KdlIdentifier);
-impl<'reader, 'doc, Context> Iterator for IterChildNodesWithName<'reader, 'doc, Context> {
-	type Item = Node<'doc, Context>;
+pub struct IterDocumentNodesWithName<'doc>(IterDocumentNodes<'doc>, kdl::KdlIdentifier);
+impl<'doc> Iterator for IterDocumentNodesWithName<'doc> {
+	type Item = &'doc kdl::KdlNode;
 	fn next(&mut self) -> Option<Self::Item> {
-		while let Some(reader) = self.0.next() {
-			if reader.node.name() == &self.1 {
-				return Some(reader);
+		while let Some(node) = self.0.next() {
+			if node.name() == &self.1 {
+				return Some(node);
 			}
 		}
 		None
 	}
 }
-impl<'reader, 'doc, Context> IterChildNodesWithName<'reader, 'doc, Context> {
-	pub fn to<T: crate::FromKdlNode<Context>>(self) -> IterChildNodesWithNameTyped<'reader, 'doc, Context, T> {
-		IterChildNodesWithNameTyped(self, std::marker::PhantomData::default())
+
+pub struct IterChildNodes<Iter, Context>(Option<Iter>, Context);
+impl<'doc, Context: 'doc> Iterator for IterChildNodes<IterDocumentNodes<'doc>, &'doc Context> {
+	type Item = Node<'doc, Context>;
+	fn next(&mut self) -> Option<Self::Item> {
+		let iter_doc = self.0.as_mut()?;
+		let node = iter_doc.next()?;
+		Some(Node::new(node, self.1))
+	}
+}
+impl<'doc, Context: 'doc> Iterator for IterChildNodes<IterDocumentNodesWithName<'doc>, &'doc Context> {
+	type Item = Node<'doc, Context>;
+	fn next(&mut self) -> Option<Self::Item> {
+		let iter_doc = self.0.as_mut()?;
+		let node = iter_doc.next()?;
+		Some(Node::new(node, self.1))
 	}
 }
 
-pub struct IterChildNodesWithNameTyped<'reader, 'doc, Context, T: crate::FromKdlNode<Context>>(
-	IterChildNodesWithName<'reader, 'doc, Context>,
-	std::marker::PhantomData<T>,
-);
-impl<'reader, 'doc, Context, T> Iterator for IterChildNodesWithNameTyped<'reader, 'doc, Context, T>
+impl<'doc, Context: 'doc, Iter> IterChildNodes<Iter, &'doc Context> where Iter: Iterator {
+	pub fn next_to<T: crate::FromKdlValue, Err>(self) -> IterValueTyped<Self, T, Err> {
+		IterValueTyped(self, std::marker::PhantomData::default(), std::marker::PhantomData::default())
+	}
+
+	pub fn to<T: crate::FromKdlNode<Context>>(self) -> IterNodeTyped<Self, T> {
+		IterNodeTyped(self, std::marker::PhantomData::default())
+	}
+}
+
+pub struct IterValueTyped<Iter, T, Err>(Iter, std::marker::PhantomData<T>, std::marker::PhantomData<Err>);
+impl<'doc, Context: 'doc, Iter, T, Err> Iterator for IterValueTyped<Iter, T, Err>
 where
+	Iter: Iterator<Item = Node<'doc, Context>>,
+	T: crate::FromKdlValue, Err: From<T::Error> + From<crate::error::MissingEntry>,
+{
+	type Item = Result<T, Err>;
+	fn next(&mut self) -> Option<Self::Item> {
+		let mut node = self.0.next()?;
+		let entry = match node.next() {
+			Ok(entry) => entry,
+			Err(err) => return Some(Err(err.into())),
+		};
+		let value = match entry.to::<T>() {
+			Ok(value) => value,
+			Err(err) => return Some(Err(err.into())),
+		};
+		Some(Ok(value))
+	}
+}
+
+pub struct IterNodeTyped<Iter, T>(Iter, std::marker::PhantomData<T>);
+impl<'doc, Context: 'doc, Iter, T> Iterator for IterNodeTyped<Iter, T>
+where
+	Iter: Iterator<Item = Node<'doc, Context>>,
 	T: crate::FromKdlNode<Context>,
 {
 	type Item = Result<T, T::Error>;
@@ -157,6 +205,58 @@ impl EntryExt for kdl::KdlEntry {
 
 	fn to<T>(&self) -> Result<T, T::Error> where T: crate::FromKdlValue {
 		T::from_kdl(self.value())
+	}
+}
+
+pub trait EntryOptExt {
+	fn to<T>(&self) -> Result<Option<T>, T::Error> where T: crate::FromKdlValue;
+}
+impl<'doc> EntryOptExt for Option<&'doc kdl::KdlEntry> {
+	fn to<T>(&self) -> Result<Option<T>, T::Error> where T: crate::FromKdlValue {
+		match self {
+			Self::Some(entry) => Ok(Some(T::from_kdl(entry.value())?)),
+			Self::None => Ok(None),
+		}
+	}
+}
+
+pub trait NodeOptExt<'doc> {
+	type Context;
+	fn next(self) -> Result<Option<&'doc kdl::KdlEntry>, crate::error::MissingEntry>;
+	fn to<T>(self) -> Result<Option<T>, T::Error> where T: crate::FromKdlNode<Self::Context>;
+}
+impl<'doc, Context> NodeOptExt<'doc> for Option<Node<'doc, Context>> {
+	type Context = Context;
+
+	fn next(self) -> Result<Option<&'doc kdl::KdlEntry>, crate::error::MissingEntry> {
+		let Some(mut node) = self else { return Ok(None) };
+		node.next().map(|v| Some(v))
+	}
+	
+	fn to<T>(self) -> Result<Option<T>, T::Error> where T: crate::FromKdlNode<Self::Context> {
+		let Some(mut node) = self else { return Ok(None) };
+		Ok(Some(T::from_kdl(&mut node)?))
+	}
+}
+
+pub trait DocumentExt {
+	fn iter_children<'doc>(&'doc self) -> IterDocumentNodes<'doc>;
+	fn children<'doc>(&'doc self, name: impl Into<kdl::KdlIdentifier>) -> IterDocumentNodesWithName<'doc>;
+	fn child<'doc>(&'doc self, key: impl Into<kdl::KdlIdentifier>) -> Option<&'doc kdl::KdlNode>;
+}
+impl DocumentExt for kdl::KdlDocument {
+
+	fn iter_children<'doc>(&'doc self) -> IterDocumentNodes<'doc> {
+		IterDocumentNodes(self, 0)
+	}
+
+	fn children<'doc>(&'doc self, name: impl Into<kdl::KdlIdentifier>) -> IterDocumentNodesWithName<'doc> {
+		IterDocumentNodesWithName(IterDocumentNodes(self, 0), name.into())
+	}
+
+	fn child<'doc>(&'doc self, key: impl Into<kdl::KdlIdentifier>) -> Option<&'doc kdl::KdlNode> {
+		let key = key.into();
+		self.children(key.clone()).next()
 	}
 }
 

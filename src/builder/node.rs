@@ -106,6 +106,12 @@ impl<T: Into<super::Entry>> NodeComponent for T {
 	}
 }
 */
+impl NodeComponent for Node {
+	fn apply_to(mut self, builder: &mut Node) {
+		builder.entries.append(&mut self.entries);
+		builder.children.append(&mut self.children);
+	}
+}
 
 pub trait IntoNodeBuilder {
 	fn into_node(self) -> Node;

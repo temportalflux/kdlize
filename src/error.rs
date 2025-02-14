@@ -88,7 +88,7 @@ pub enum ParseValueFromStr<TError> {
 #[error("Expected '{2}' to be a '{0}', but it is a '{1}'.")]
 pub struct ValueTypeMismatch(&'static str, &'static str, kdl::KdlValue);
 impl ValueTypeMismatch {
-	pub(crate) fn new(value: &kdl::KdlValue, desired: &'static str) -> Self {
+	pub fn new(value: &kdl::KdlValue, desired: &'static str) -> Self {
 		let actual_name = match value {
 			kdl::KdlValue::String(_) => "String",
 			kdl::KdlValue::Integer(_) => "Integer",
