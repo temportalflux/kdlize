@@ -1,4 +1,5 @@
 use crate::AsKdlValue;
+use super::Typed;
 
 #[derive(Debug)]
 pub struct Entry {
@@ -30,7 +31,18 @@ impl Entry {
 	}
 }
 
-pub struct Value<V: AsKdlValue>(pub V);
+pub trait InnerValue {
+	type Inner;
+	fn inner(&self) -> &Self::Inner;
+}
+
+pub struct Value<V>(pub V);
+impl<V> InnerValue for Value<&V> {
+	type Inner = V;
+	fn inner(&self) -> &Self::Inner {
+		self.0
+	}
+}
 impl<V: AsKdlValue> Into<Entry> for Value<V> {
 	fn into(self) -> Entry {
 		let mut builder = Entry::default();
@@ -39,8 +51,13 @@ impl<V: AsKdlValue> Into<Entry> for Value<V> {
 	}
 }
 
-pub struct Typed<Ty: Into<kdl::KdlIdentifier>, V: AsKdlValue>(pub Ty, pub Value<V>);
-impl<Ty: Into<kdl::KdlIdentifier>, V: AsKdlValue> Into<Entry> for Typed<Ty, V> {
+impl<Ty: Into<kdl::KdlIdentifier>, I, V> InnerValue for Typed<Ty, I> where I: InnerValue<Inner=V> {
+	type Inner = V;
+	fn inner(&self) -> &Self::Inner {
+		self.1.inner()
+	}
+}
+impl<Ty: Into<kdl::KdlIdentifier>, V: AsKdlValue> Into<Entry> for Typed<Ty, Value<V>> {
 	fn into(self) -> Entry {
 		let mut builder: Entry = self.1.into();
 		builder.entry.set_ty(self.0);
@@ -49,6 +66,12 @@ impl<Ty: Into<kdl::KdlIdentifier>, V: AsKdlValue> Into<Entry> for Typed<Ty, V> {
 }
 
 pub struct Property<K: Into<kdl::KdlIdentifier>, V: Into<Entry>>(pub K, pub V);
+impl<K: Into<kdl::KdlIdentifier>, I, V> InnerValue for Property<K, I> where I: InnerValue<Inner=V> + Into<Entry> {
+	type Inner = V;
+	fn inner(&self) -> &Self::Inner {
+		self.1.inner()
+	}
+}
 impl<K: Into<kdl::KdlIdentifier>, V: Into<Entry>> Into<Entry> for Property<K, V> {
 	fn into(self) -> Entry {
 		let mut builder: Entry = self.1.into();

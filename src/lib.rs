@@ -27,9 +27,9 @@ macro_rules! impl_kdl_node {
 	};
 }
 
-pub trait FromKdlValue {
+pub trait FromKdlValue<'doc> {
 	type Error;
-	fn from_kdl(value: &kdl::KdlValue) -> Result<Self, Self::Error>
+	fn from_kdl(value: &'doc kdl::KdlValue) -> Result<Self, Self::Error>
 	where
 		Self: Sized;
 }
@@ -49,16 +49,25 @@ impl<V: AsKdlValue + Clone> AsKdlValue for std::borrow::Cow<'_, V> {
 	}
 }
 
-impl FromKdlValue for kdl::KdlValue {
+impl<'doc> FromKdlValue<'doc> for &'doc kdl::KdlValue {
 	type Error = std::convert::Infallible;
-	fn from_kdl(value: &kdl::KdlValue) -> Result<Self, Self::Error> {
-		Ok(value.clone())
+	fn from_kdl(value: &'doc kdl::KdlValue) -> Result<Self, Self::Error> {
+		Ok(value)
 	}
 }
 
-impl FromKdlValue for String {
+impl<'doc> FromKdlValue<'doc> for &'doc str {
 	type Error = ValueTypeMismatch;
-	fn from_kdl(value: &kdl::KdlValue) -> Result<Self, Self::Error> {
+	fn from_kdl(value: &'doc kdl::KdlValue) -> Result<Self, Self::Error> {
+		match value {
+			kdl::KdlValue::String(value) => Ok(value.as_str()),
+			_ => Err(ValueTypeMismatch::new(&value, "String")),
+		}
+	}
+}
+impl<'doc> FromKdlValue<'doc> for String {
+	type Error = ValueTypeMismatch;
+	fn from_kdl(value: &'doc kdl::KdlValue) -> Result<Self, Self::Error> {
 		match value {
 			kdl::KdlValue::String(value) => Ok(value.clone()),
 			_ => Err(ValueTypeMismatch::new(&value, "String")),
@@ -86,12 +95,12 @@ impl AsKdlValue for String {
 #[macro_export]
 macro_rules! impl_kdlvalue_str {
 	($target:ty) => {
-		impl $crate::FromKdlValue for $target
+		impl<'doc> $crate::FromKdlValue<'doc> for $target
 		where
 			$target: std::str::FromStr,
 		{
 			type Error = $crate::error::ParseValueFromStr<<$target as std::str::FromStr>::Err>;
-			fn from_kdl(value: &kdl::KdlValue) -> Result<Self, Self::Error> {
+			fn from_kdl(value: &'doc kdl::KdlValue) -> Result<Self, Self::Error> {
 				let value = match value {
 					kdl::KdlValue::String(value) => value,
 					_ => return Err($crate::error::ValueTypeMismatch::new(&value, "String").into()),
@@ -131,9 +140,9 @@ mod test {
 
 macro_rules! impl_kdlvalue_primitive {
 	($target:ty, $actual:ty) => {
-		impl FromKdlValue for $target {
+		impl<'doc> FromKdlValue<'doc> for $target {
 			type Error = ValueTypeMismatch;
-			fn from_kdl(value: &kdl::KdlValue) -> Result<Self, Self::Error> {
+			fn from_kdl(value: &'doc kdl::KdlValue) -> Result<Self, Self::Error> {
 				Ok(<$actual>::from_kdl(value)? as $target)
 			}
 		}
@@ -145,9 +154,9 @@ macro_rules! impl_kdlvalue_primitive {
 	};
 }
 
-impl FromKdlValue for i128 {
+impl<'doc> FromKdlValue<'doc> for i128 {
 	type Error = ValueTypeMismatch;
-	fn from_kdl(value: &kdl::KdlValue) -> Result<Self, Self::Error> {
+	fn from_kdl(value: &'doc kdl::KdlValue) -> Result<Self, Self::Error> {
 		match value {
 			kdl::KdlValue::Integer(value) => Ok(*value),
 			_ => Err(ValueTypeMismatch::new(&value, "Integer")),
@@ -172,9 +181,9 @@ impl_kdlvalue_primitive!(u128, i128);
 impl_kdlvalue_primitive!(usize, i128);
 impl_kdlvalue_primitive!(isize, i128);
 
-impl FromKdlValue for f64 {
+impl<'doc> FromKdlValue<'doc> for f64 {
 	type Error = ValueTypeMismatch;
-	fn from_kdl(value: &kdl::KdlValue) -> Result<Self, Self::Error> {
+	fn from_kdl(value: &'doc kdl::KdlValue) -> Result<Self, Self::Error> {
 		match value {
 			kdl::KdlValue::Float(value) => Ok(*value),
 			_ => Err(ValueTypeMismatch::new(&value, "Float")),
@@ -189,9 +198,9 @@ impl AsKdlValue for f64 {
 impl_kdlvalue_primitive!(f32, f64);
 //impl_kdlvalue_primitive!(f64,   f64);
 
-impl FromKdlValue for bool {
+impl<'doc> FromKdlValue<'doc> for bool {
 	type Error = ValueTypeMismatch;
-	fn from_kdl(value: &kdl::KdlValue) -> Result<Self, Self::Error> {
+	fn from_kdl(value: &'doc kdl::KdlValue) -> Result<Self, Self::Error> {
 		match value {
 			kdl::KdlValue::Bool(value) => Ok(*value),
 			_ => Err(ValueTypeMismatch::new(&value, "Bool")),
@@ -216,9 +225,9 @@ where
 	}
 }
 
-pub trait FromKdlNode<Context> {
+pub trait FromKdlNode<'doc, Context> {
 	type Error;
-	fn from_kdl(node: &mut reader::Node<Context>) -> Result<Self, Self::Error>
+	fn from_kdl(node: &mut reader::Node<'doc, Context>) -> Result<Self, Self::Error>
 	where
 		Self: Sized;
 }

@@ -6,6 +6,10 @@ pub use entry::*;
 
 pub struct OmitIfEmpty<V>(pub V);
 
+pub struct OmitIfEqual<V, T>(pub V, pub T);
+
+pub struct Typed<Ty: Into<kdl::KdlIdentifier>, V>(pub Ty, pub V);
+
 #[cfg(test)]
 mod test {
 	use super::*;
