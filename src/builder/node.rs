@@ -1,5 +1,5 @@
-use crate::{AsKdlNode, AsKdlValue};
 use super::{Entry, OmitIfEmpty, OmitIfEqual, Property, Typed, Value};
+use crate::{AsKdlNode, AsKdlValue};
 
 #[derive(Default, Debug)]
 pub struct Node {
@@ -166,7 +166,11 @@ impl<Ty: Into<kdl::KdlIdentifier>, V: AsKdlNode> NodeComponent for OmitIfEmpty<T
 		}
 	}
 }
-impl<V, T> NodeComponent for OmitIfEqual<V, T> where V: super::InnerValue<Inner=T> + Into<Entry>, T: PartialEq + AsKdlValue {
+impl<V, T> NodeComponent for OmitIfEqual<V, T>
+where
+	V: super::InnerValue<Inner = T> + Into<Entry>,
+	T: PartialEq + AsKdlValue,
+{
 	fn apply_to(self, builder: &mut Node) {
 		if self.0.inner() != &self.1 {
 			let entry_builder: Entry = self.0.into();
@@ -256,7 +260,7 @@ where
 {
 	fn apply_to(self, builder: &mut Node) {
 		let node_name: kdl::KdlIdentifier = self.0.into();
-		for item in self.1.0.into_iter() {
+		for item in self.1 .0.into_iter() {
 			let child = Node::default() + Value(item);
 			builder.children.push(child.build(node_name.clone()));
 		}
@@ -265,19 +269,20 @@ where
 
 impl<K: Into<kdl::KdlIdentifier>, V: IntoNodeBuilder> NodeComponent for OmitIfEmpty<Child<K, V>> {
 	fn apply_to(self, builder: &mut Node) {
-		let child = self.0.1.into_node();
+		let child = self.0 .1.into_node();
 		if !child.is_empty() {
-			builder.children.push(child.build(self.0.0));
+			builder.children.push(child.build(self.0 .0));
 		}
 	}
 }
 impl<K: Into<kdl::KdlIdentifier>, V> NodeComponent for OmitIfEmpty<Children<K, V>>
 where
 	V: IntoIterator,
-	V::Item: AsKdlNode, {
+	V::Item: AsKdlNode,
+{
 	fn apply_to(self, builder: &mut Node) {
-		let node_name: kdl::KdlIdentifier = self.0.0.into();
-		for item in self.0.1.into_iter() {
+		let node_name: kdl::KdlIdentifier = self.0 .0.into();
+		for item in self.0 .1.into_iter() {
 			let child = item.as_kdl();
 			if !child.is_empty() {
 				builder.children.push(child.build(node_name.clone()));

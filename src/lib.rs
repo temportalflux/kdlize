@@ -37,8 +37,7 @@ pub trait FromKdlValue<'doc> {
 pub trait AsKdlValue {
 	fn as_kdl(&self) -> kdl::KdlValue;
 }
-impl<V: AsKdlValue> AsKdlValue for &V
-{
+impl<V: AsKdlValue> AsKdlValue for &V {
 	fn as_kdl(&self) -> kdl::KdlValue {
 		V::as_kdl(self)
 	}
@@ -100,7 +99,11 @@ impl<'doc> FromKdlValue<'doc> for std::path::PathBuf {
 }
 impl AsKdlValue for std::path::PathBuf {
 	fn as_kdl(&self) -> kdl::KdlValue {
-		kdl::KdlValue::String(self.to_str().expect("pathbuf must resolve to a str string slice").to_owned())
+		kdl::KdlValue::String(
+			self.to_str()
+				.expect("pathbuf must resolve to a str string slice")
+				.to_owned(),
+		)
 	}
 }
 

@@ -1,5 +1,5 @@
-use crate::AsKdlValue;
 use super::Typed;
+use crate::AsKdlValue;
 
 #[derive(Debug)]
 pub struct Entry {
@@ -51,7 +51,10 @@ impl<V: AsKdlValue> Into<Entry> for Value<V> {
 	}
 }
 
-impl<Ty: Into<kdl::KdlIdentifier>, I, V> InnerValue for Typed<Ty, I> where I: InnerValue<Inner=V> {
+impl<Ty: Into<kdl::KdlIdentifier>, I, V> InnerValue for Typed<Ty, I>
+where
+	I: InnerValue<Inner = V>,
+{
 	type Inner = V;
 	fn inner(&self) -> &Self::Inner {
 		self.1.inner()
@@ -66,7 +69,10 @@ impl<Ty: Into<kdl::KdlIdentifier>, V: AsKdlValue> Into<Entry> for Typed<Ty, Valu
 }
 
 pub struct Property<K: Into<kdl::KdlIdentifier>, V: Into<Entry>>(pub K, pub V);
-impl<K: Into<kdl::KdlIdentifier>, I, V> InnerValue for Property<K, I> where I: InnerValue<Inner=V> + Into<Entry> {
+impl<K: Into<kdl::KdlIdentifier>, I, V> InnerValue for Property<K, I>
+where
+	I: InnerValue<Inner = V> + Into<Entry>,
+{
 	type Inner = V;
 	fn inner(&self) -> &Self::Inner {
 		self.1.inner()
