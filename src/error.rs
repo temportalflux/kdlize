@@ -1,7 +1,7 @@
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum QueryError {
 	#[error(transparent)]
-	MissingValue(#[from] MissingEntryValue),
+	MissingValue(#[from] MissingEntry),
 	#[error(transparent)]
 	MissingType(#[from] MissingEntryType),
 	#[error(transparent)]
@@ -18,12 +18,10 @@ impl From<RequiredValue<ValueTypeMismatch>> for QueryError {
 	}
 }
 
-pub type MissingEntry = MissingEntryValue;
-
 /// The node is missing an entry that was required.
 #[derive(thiserror::Error, Debug, Clone, PartialEq)]
-pub struct MissingEntryValue(kdl::KdlNode, kdl::NodeKey);
-impl MissingEntryValue {
+pub struct MissingEntry(kdl::KdlNode, kdl::NodeKey);
+impl MissingEntry {
 	pub(crate) fn new_index(node: kdl::KdlNode, idx: usize) -> Self {
 		Self(node, kdl::NodeKey::Index(idx))
 	}
@@ -31,7 +29,7 @@ impl MissingEntryValue {
 		Self(node, kdl::NodeKey::Key(kdl::KdlIdentifier::from(key.as_ref())))
 	}
 }
-impl std::fmt::Display for MissingEntryValue {
+impl std::fmt::Display for MissingEntry {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match &self.1 {
 			kdl::NodeKey::Index(v) => write!(f, "Node {} is missing an entry at index {v}", self.0),
@@ -50,10 +48,14 @@ pub struct MissingEntryType(pub(crate) kdl::KdlEntry);
 #[error("Node {0} is missing a child node with name \"{1}\"")]
 pub struct MissingChild(pub(crate) kdl::KdlNode, pub(crate) kdl::KdlIdentifier);
 
+#[derive(thiserror::Error, Debug, Clone, PartialEq)]
+#[error("Node \"{0}\" is missing children/subdocument")]
+pub struct MissingDocument(pub(crate) kdl::KdlNode);
+
 #[derive(thiserror::Error, Debug)]
 pub enum MissingTypedEntry {
 	#[error(transparent)]
-	MissingValue(#[from] MissingEntryValue),
+	MissingValue(#[from] MissingEntry),
 	#[error(transparent)]
 	MissingType(#[from] MissingEntryType),
 }
@@ -61,7 +63,7 @@ pub enum MissingTypedEntry {
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum RequiredValue<E> {
 	#[error(transparent)]
-	Missing(MissingEntryValue),
+	Missing(MissingEntry),
 	#[error(transparent)]
 	Parse(E),
 }

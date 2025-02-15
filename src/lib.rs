@@ -68,10 +68,7 @@ impl<'doc> FromKdlValue<'doc> for &'doc str {
 impl<'doc> FromKdlValue<'doc> for String {
 	type Error = ValueTypeMismatch;
 	fn from_kdl(value: &'doc kdl::KdlValue) -> Result<Self, Self::Error> {
-		match value {
-			kdl::KdlValue::String(value) => Ok(value.clone()),
-			_ => Err(ValueTypeMismatch::new(&value, "String")),
-		}
+		Ok(<&str>::from_kdl(value)?.to_owned())
 	}
 }
 impl AsKdlValue for str {
@@ -87,6 +84,23 @@ impl AsKdlValue for &str {
 impl AsKdlValue for String {
 	fn as_kdl(&self) -> kdl::KdlValue {
 		kdl::KdlValue::String(self.clone())
+	}
+}
+impl<'doc> FromKdlValue<'doc> for &'doc std::path::Path {
+	type Error = ValueTypeMismatch;
+	fn from_kdl(value: &'doc kdl::KdlValue) -> Result<Self, Self::Error> {
+		Ok(std::path::Path::new(<&str>::from_kdl(value)?))
+	}
+}
+impl<'doc> FromKdlValue<'doc> for std::path::PathBuf {
+	type Error = ValueTypeMismatch;
+	fn from_kdl(value: &'doc kdl::KdlValue) -> Result<Self, Self::Error> {
+		Ok(<&std::path::Path>::from_kdl(value)?.to_owned())
+	}
+}
+impl AsKdlValue for std::path::PathBuf {
+	fn as_kdl(&self) -> kdl::KdlValue {
+		kdl::KdlValue::String(self.to_str().expect("pathbuf must resolve to a str string slice").to_owned())
 	}
 }
 

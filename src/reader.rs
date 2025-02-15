@@ -59,8 +59,8 @@ impl<'doc, Context> Node<'doc, Context> {
 		self.node.entries()
 	}
 
-	pub fn document(&self) -> Option<&'doc kdl::KdlDocument> {
-		self.node.children()
+	pub fn document(&self) -> Result<&'doc kdl::KdlDocument, crate::error::MissingDocument> {
+		self.node.children().ok_or_else(|| crate::error::MissingDocument(self.node.clone()))
 	}
 }
 
@@ -84,12 +84,12 @@ impl<'doc, Context> Node<'doc, Context> {
 	}
 
 	pub fn iter_children(&self) -> IterChildNodes<IterDocumentNodes<'doc>, &'doc Context> {
-		let iter_doc = self.document().map(|doc| IterDocumentNodes(doc, 0));
+		let iter_doc = self.document().ok().map(|doc| IterDocumentNodes(doc, 0));
 		IterChildNodes(iter_doc, &self.ctx)
 	}
 
 	pub fn children(&self, name: impl Into<kdl::KdlIdentifier>) -> IterChildNodes<IterDocumentNodesWithName<'doc>, &'doc Context> {
-		let iter_doc = self.document().map(|doc| IterDocumentNodesWithName(IterDocumentNodes(doc, 0), name.into()));
+		let iter_doc = self.document().ok().map(|doc| IterDocumentNodesWithName(IterDocumentNodes(doc, 0), name.into()));
 		IterChildNodes(iter_doc, &self.ctx)
 	}
 
@@ -151,8 +151,12 @@ impl<'doc, Context: 'doc> Iterator for IterChildNodes<IterDocumentNodesWithName<
 }
 
 impl<'doc, Context: 'doc, Iter> IterChildNodes<Iter, &'doc Context> where Iter: Iterator {
-	pub fn next_to<T: crate::FromKdlValue<'doc>, Err>(self) -> IterValueTyped<Self, T, Err> {
-		IterValueTyped(self, std::marker::PhantomData::default(), std::marker::PhantomData::default())
+	pub fn value(self) -> IterNodeFirstValue<Self> {
+		IterNodeFirstValue(self)
+	}
+
+	pub fn prop<S: AsRef<str>>(self, key: S) -> IterNodePropValue<Self, S> {
+		IterNodePropValue(self, key)
 	}
 
 	pub fn to<T: crate::FromKdlNode<'doc, Context>>(self) -> IterNodeTyped<Self, T> {
@@ -160,24 +164,63 @@ impl<'doc, Context: 'doc, Iter> IterChildNodes<Iter, &'doc Context> where Iter: 
 	}
 }
 
-pub struct IterValueTyped<Iter, T, Err>(Iter, std::marker::PhantomData<T>, std::marker::PhantomData<Err>);
-impl<'doc, Context: 'doc, Iter, T, Err> Iterator for IterValueTyped<Iter, T, Err>
+pub struct IterNodeFirstValue<Iter>(Iter);
+impl<'doc, Context: 'doc, Iter> Iterator for IterNodeFirstValue<Iter>
 where
 	Iter: Iterator<Item = Node<'doc, Context>>,
-	T: crate::FromKdlValue<'doc>, Err: From<T::Error> + From<crate::error::MissingEntry>,
 {
-	type Item = Result<T, Err>;
+	type Item = Result<&'doc kdl::KdlEntry, crate::error::MissingEntry>;
 	fn next(&mut self) -> Option<Self::Item> {
 		let mut node = self.0.next()?;
-		let entry = match node.next() {
-			Ok(entry) => entry,
-			Err(err) => return Some(Err(err.into())),
-		};
-		let value = match entry.to::<T>() {
-			Ok(value) => value,
-			Err(err) => return Some(Err(err.into())),
-		};
-		Some(Ok(value))
+		Some(node.next())
+	}
+}
+impl<'doc, Context: 'doc, Iter> IterNodeFirstValue<Iter> where Iter: Iterator<Item = Node<'doc, Context>> {
+	pub fn to<T: crate::FromKdlValue<'doc>>(self) -> IterNodeValueTyped<Self, T> {
+		IterNodeValueTyped(self, std::marker::PhantomData::default())
+	}
+}
+
+pub struct IterNodePropValue<Iter, S: AsRef<str>>(Iter, S);
+impl<'doc, Context: 'doc, Iter, S: AsRef<str>> Iterator for IterNodePropValue<Iter, S>
+where
+	Iter: Iterator<Item = Node<'doc, Context>>,
+{
+	type Item = Result<&'doc kdl::KdlEntry, crate::error::MissingEntry>;
+	fn next(&mut self) -> Option<Self::Item> {
+		let node = self.0.next()?;
+		Some(node.prop(self.1.as_ref()))
+	}
+}
+impl<'doc, Context: 'doc, Iter, S: AsRef<str>> IterNodePropValue<Iter, S> where Iter: Iterator<Item = Node<'doc, Context>> {
+	pub fn to<T: crate::FromKdlValue<'doc>>(self) -> IterNodeValueTyped<Self, T> {
+		IterNodeValueTyped(self, std::marker::PhantomData::default())
+	}
+}
+
+pub struct IterNodeValueTyped<Iter, T>(Iter, std::marker::PhantomData<T>);
+impl<'doc, Iter, T> Iterator for IterNodeValueTyped<Iter, T>
+where
+	Iter: Iterator<Item = Result<&'doc kdl::KdlEntry, crate::error::MissingEntry>>,
+	T: crate::FromKdlValue<'doc>,
+{
+	type Item = Result<Result<T, T::Error>, crate::error::MissingEntry>;
+	fn next(&mut self) -> Option<Self::Item> {
+		match self.0.next()? {
+			Err(missing_entry) => Some(Err(missing_entry)),
+			Ok(entry) => Some(Ok(entry.to::<T>())),
+		}
+	}
+}
+impl<'doc, Iter, T: crate::FromKdlValue<'doc>> IterNodeValueTyped<Iter, T> where Self: Iterator<Item=Result<Result<T, T::Error>, crate::error::MissingEntry>> {
+	pub fn vec(self) -> Result<Result<Vec<T>, T::Error>, crate::error::MissingEntry> {
+		match self.collect::<Result<Vec<_>, _>>() {
+			Ok(inner) => match inner.into_iter().collect::<Result<Vec<_>, _>>() {
+				Ok(values) => Ok(Ok(values)),
+				Err(parse_err) => Ok(Err(parse_err)),
+			},
+			Err(missing) => Err(missing),
+		}
 	}
 }
 
@@ -190,6 +233,13 @@ where
 	type Item = Result<T, T::Error>;
 	fn next(&mut self) -> Option<Self::Item> {
 		Some(T::from_kdl(&mut self.0.next()?))
+	}
+}
+impl<'doc, Context: 'doc, Iter, T> IterNodeTyped<Iter, T>
+where
+Iter: Iterator<Item = Node<'doc, Context>>, T: crate::FromKdlNode<'doc, Context> {
+	pub fn vec(self) -> Result<Vec<T>, T::Error> {
+		self.collect::<Result<Vec<_>, _>>()
 	}
 }
 
@@ -223,6 +273,7 @@ impl<'doc> EntryOptExt<'doc> for Option<&'doc kdl::KdlEntry> {
 pub trait NodeOptExt<'doc> {
 	type Context;
 	fn next(self) -> Result<Option<&'doc kdl::KdlEntry>, crate::error::MissingEntry>;
+	fn prop(self, key: impl AsRef<str>) -> Result<Option<&'doc kdl::KdlEntry>, crate::error::MissingEntry>;
 	fn to<T>(self) -> Result<Option<T>, T::Error> where T: crate::FromKdlNode<'doc, Self::Context>;
 }
 impl<'doc, Context> NodeOptExt<'doc> for Option<Node<'doc, Context>> {
@@ -231,6 +282,11 @@ impl<'doc, Context> NodeOptExt<'doc> for Option<Node<'doc, Context>> {
 	fn next(self) -> Result<Option<&'doc kdl::KdlEntry>, crate::error::MissingEntry> {
 		let Some(mut node) = self else { return Ok(None) };
 		node.next().map(|v| Some(v))
+	}
+
+	fn prop(self, key: impl AsRef<str>) -> Result<Option<&'doc kdl::KdlEntry>, crate::error::MissingEntry> {
+		let Some(node) = self else { return Ok(None) };
+		node.prop(key).map(|v| Some(v))
 	}
 	
 	fn to<T>(self) -> Result<Option<T>, T::Error> where T: crate::FromKdlNode<'doc, Self::Context> {

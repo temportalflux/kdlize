@@ -96,6 +96,11 @@ impl<T: NodeComponent> std::ops::AddAssign<T> for Node {
 pub trait NodeComponent {
 	fn apply_to(self, builder: &mut Node);
 }
+impl NodeComponent for kdl::KdlNode {
+	fn apply_to(self, builder: &mut Node) {
+		builder.children.push(self);
+	}
+}
 impl NodeComponent for Node {
 	fn apply_to(mut self, builder: &mut Node) {
 		builder.entries.append(&mut self.entries);
@@ -117,6 +122,11 @@ impl IntoNodeBuilder for Node {
 	}
 }
 impl<V: AsKdlNode> IntoNodeBuilder for &V {
+	fn into_node(self) -> Node {
+		self.as_kdl()
+	}
+}
+impl<V: AsKdlNode> IntoNodeBuilder for Option<&V> {
 	fn into_node(self) -> Node {
 		self.as_kdl()
 	}
@@ -176,6 +186,13 @@ impl<V: AsKdlValue> NodeComponent for Value<V> {
 		entry.apply_to(builder);
 	}
 }
+impl NodeComponent for &kdl::KdlValue {
+	fn apply_to(self, builder: &mut Node) {
+		let mut entry = Entry::default();
+		entry.entry.set_value(self.clone());
+		entry.apply_to(builder);
+	}
+}
 impl<Ty: Into<kdl::KdlIdentifier>, V: AsKdlValue> IntoNodeBuilder for Typed<Ty, Value<V>> {
 	fn into_node(self) -> Node {
 		let entry: Entry = self.into();
@@ -222,12 +239,12 @@ pub struct Children<K: Into<kdl::KdlIdentifier>, V>(pub K, pub V);
 impl<K: Into<kdl::KdlIdentifier>, V> NodeComponent for Children<K, V>
 where
 	V: IntoIterator,
-	V::Item: AsKdlNode,
+	V::Item: IntoNodeBuilder,
 {
 	fn apply_to(self, builder: &mut Node) {
 		let node_name: kdl::KdlIdentifier = self.0.into();
 		for item in self.1.into_iter() {
-			let child = item.as_kdl();
+			let child = item.into_node();
 			builder.children.push(child.build(node_name.clone()));
 		}
 	}
