@@ -67,6 +67,11 @@ impl<'doc, Context> Node<'doc, Context> {
 			.children()
 			.ok_or_else(|| crate::error::MissingDocument(self.node.clone()))
 	}
+
+	pub fn has_children(&self) -> bool {
+		let Ok(doc) = self.document() else { return false };
+		!doc.nodes().is_empty()
+	}
 }
 
 impl<'doc, Context> Node<'doc, Context> {
