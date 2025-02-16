@@ -241,9 +241,9 @@ impl<'doc, Iter, T: crate::FromKdlValue<'doc>> IterNodeValueTyped<Iter, T>
 where
 	Self: Iterator<Item = Result<Result<T, T::Error>, crate::error::MissingEntry>>,
 {
-	pub fn vec(self) -> Result<Result<Vec<T>, T::Error>, crate::error::MissingEntry> {
-		match self.collect::<Result<Vec<_>, _>>() {
-			Ok(inner) => match inner.into_iter().collect::<Result<Vec<_>, _>>() {
+	pub fn collect<C: FromIterator<T>>(self) -> Result<Result<C, T::Error>, crate::error::MissingEntry> {
+		match <Self as Iterator>::collect::<Result<Vec<_>, _>>(self) {
+			Ok(inner) => match inner.into_iter().collect::<Result<C, _>>() {
 				Ok(values) => Ok(Ok(values)),
 				Err(parse_err) => Ok(Err(parse_err)),
 			},
@@ -268,8 +268,8 @@ where
 	Iter: Iterator<Item = Node<'doc, Context>>,
 	T: crate::FromKdlNode<'doc, Context>,
 {
-	pub fn vec(self) -> Result<Vec<T>, T::Error> {
-		self.collect::<Result<Vec<_>, _>>()
+	pub fn collect<C: FromIterator<T>>(self) -> Result<C, T::Error> {
+		<Self as Iterator>::collect(self)
 	}
 }
 

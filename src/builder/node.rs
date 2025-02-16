@@ -211,11 +211,16 @@ impl<Ty: Into<kdl::KdlIdentifier>, V: AsKdlValue> NodeComponent for Typed<Ty, Va
 }
 impl<Ty: Into<kdl::KdlIdentifier>, V: AsKdlNode> NodeComponent for Typed<Ty, V> {
 	fn apply_to(self, builder: &mut Node) {
+		self.into_node().apply_to(builder);
+	}
+}
+impl<Ty: Into<kdl::KdlIdentifier>, V: AsKdlNode> IntoNodeBuilder for Typed<Ty, V> {
+	fn into_node(self) -> Node {
 		let mut node = self.1.as_kdl();
 		if let Some(entry) = node.entries.get_mut(0) {
 			entry.set_ty(self.0.into());
 		}
-		node.apply_to(builder);
+		node
 	}
 }
 impl<K: Into<kdl::KdlIdentifier>, V: Into<Entry>> IntoNodeBuilder for Property<K, V> {
@@ -284,6 +289,21 @@ where
 		let node_name: kdl::KdlIdentifier = self.0 .0.into();
 		for item in self.0 .1.into_iter() {
 			let child = item.as_kdl();
+			if !child.is_empty() {
+				builder.children.push(child.build(node_name.clone()));
+			}
+		}
+	}
+}
+impl<K: Into<kdl::KdlIdentifier>, V> NodeComponent for OmitIfEmpty<Children<K, Value<V>>>
+where
+	V: IntoIterator,
+	V::Item: AsKdlValue,
+{
+	fn apply_to(self, builder: &mut Node) {
+		let node_name: kdl::KdlIdentifier = self.0 .0.into();
+		for item in self.0 .1 .0.into_iter() {
+			let child = Node::default() + Value(item);
 			if !child.is_empty() {
 				builder.children.push(child.build(node_name.clone()));
 			}
