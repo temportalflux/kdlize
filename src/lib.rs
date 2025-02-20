@@ -82,7 +82,7 @@ impl AsKdlValue for &str {
 }
 impl AsKdlValue for String {
 	fn as_kdl(&self) -> kdl::KdlValue {
-		kdl::KdlValue::String(self.clone())
+		self.as_str().as_kdl()
 	}
 }
 impl<'doc> FromKdlValue<'doc> for &'doc std::path::Path {
@@ -99,11 +99,7 @@ impl<'doc> FromKdlValue<'doc> for std::path::PathBuf {
 }
 impl AsKdlValue for std::path::PathBuf {
 	fn as_kdl(&self) -> kdl::KdlValue {
-		kdl::KdlValue::String(
-			self.to_str()
-				.expect("pathbuf must resolve to a str string slice")
-				.to_owned(),
-		)
+		self.to_str().as_kdl()
 	}
 }
 
@@ -132,7 +128,11 @@ macro_rules! impl_kdlvalue_str {
 			$target: ToString,
 		{
 			fn as_kdl(&self) -> kdl::KdlValue {
-				kdl::KdlValue::String(self.to_string())
+				let s = self.to_string();
+				match s.is_empty() {
+					true => kdl::KdlValue::Null,
+					false => kdl::KdlValue::String(s),
+				}
 			}
 		}
 	};

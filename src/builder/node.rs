@@ -1,7 +1,7 @@
 use super::{Entry, OmitIfEmpty, OmitIfEqual, Property, Typed, Value};
 use crate::{AsKdlNode, AsKdlValue};
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Node {
 	pub(super) entries: Vec<kdl::KdlEntry>,
 	pub(super) children: Vec<kdl::KdlNode>,
@@ -50,7 +50,6 @@ impl Node {
 			node.ensure_children().nodes_mut().append(&mut children);
 		}
 
-		node.clear_format_recursive();
 		node.autoformat();
 
 		node
@@ -138,15 +137,31 @@ impl IntoNodeBuilder for Entry {
 }
 impl NodeComponent for Entry {
 	fn apply_to(self, builder: &mut Node) {
-		builder.entries.push(self.entry);
+		if !self.entry.value().is_null() {
+			builder.entries.push(self.entry);
+		}
 	}
 }
 impl<V: Into<Entry>> NodeComponent for OmitIfEmpty<V> {
 	fn apply_to(self, builder: &mut Node) {
 		let entry_builder: Entry = self.0.into();
-		if !entry_builder.entry.value().is_null() {
-			entry_builder.apply_to(builder);
+		if let kdl::KdlValue::String(inner) = entry_builder.entry.value() {
+			if inner.is_empty() {
+				return;
+			}
 		}
+		entry_builder.apply_to(builder);
+	}
+}
+impl<V: Into<Entry>> IntoNodeBuilder for OmitIfEmpty<V> {
+	fn into_node(self) -> Node {
+		let entry_builder: Entry = self.0.into();
+		if let kdl::KdlValue::String(inner) = entry_builder.entry.value() {
+			if inner.is_empty() {
+				return Node::default();
+			}
+		}
+		entry_builder.into_node()
 	}
 }
 impl<V: AsKdlNode> NodeComponent for OmitIfEmpty<&Option<V>> {
@@ -175,6 +190,21 @@ where
 		if self.0.inner() != &self.1 {
 			let entry_builder: Entry = self.0.into();
 			entry_builder.apply_to(builder);
+		}
+	}
+}
+impl<V, T> IntoNodeBuilder for OmitIfEqual<V, T>
+where
+	V: super::InnerValue<Inner = T> + Into<Entry>,
+	T: PartialEq + AsKdlValue,
+{
+	fn into_node(self) -> Node {
+		if self.0.inner() != &self.1 {
+			let entry_builder: Entry = self.0.into();
+			entry_builder.into_node()
+		}
+		else {
+			Node::default()
 		}
 	}
 }
@@ -303,7 +333,8 @@ where
 	fn apply_to(self, builder: &mut Node) {
 		let node_name: kdl::KdlIdentifier = self.0 .0.into();
 		for item in self.0 .1 .0.into_iter() {
-			let child = Node::default() + Value(item);
+			let child = Node::default() + OmitIfEmpty(Value(item));
+			println!("{child:?}");
 			if !child.is_empty() {
 				builder.children.push(child.build(node_name.clone()));
 			}

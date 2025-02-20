@@ -140,7 +140,7 @@ impl<'doc> Iterator for IterDocumentNodesWithName<'doc> {
 	type Item = &'doc kdl::KdlNode;
 	fn next(&mut self) -> Option<Self::Item> {
 		while let Some(node) = self.0.next() {
-			if node.name() == &self.1 {
+			if node.name().value() == self.1.value() {
 				return Some(node);
 			}
 		}
