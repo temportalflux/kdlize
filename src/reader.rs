@@ -22,6 +22,7 @@
 pub struct Node<'doc, Context> {
 	node: &'doc kdl::KdlNode,
 	ctx: &'doc Context,
+	is_child: bool,
 	entry_cursor: usize,
 }
 
@@ -30,6 +31,7 @@ impl<'doc, Context> Clone for Node<'doc, Context> {
 		Self {
 			node: self.node,
 			ctx: self.ctx,
+			is_child: self.is_child,
 			entry_cursor: self.entry_cursor.clone(),
 		}
 	}
@@ -46,12 +48,17 @@ impl<'doc, Context> Node<'doc, Context> {
 		Self {
 			node,
 			ctx,
+			is_child: false,
 			entry_cursor: 0,
 		}
 	}
 
 	pub fn context(&self) -> &Context {
 		&self.ctx
+	}
+
+	pub fn is_child(&self) -> bool {
+		self.is_child
 	}
 
 	pub fn name(&self) -> &'doc kdl::KdlIdentifier {
@@ -154,7 +161,7 @@ impl<'doc, Context: 'doc> Iterator for IterChildNodes<IterDocumentNodes<'doc>, &
 	fn next(&mut self) -> Option<Self::Item> {
 		let iter_doc = self.0.as_mut()?;
 		let node = iter_doc.next()?;
-		Some(Node::new(node, self.1))
+		Some(Node { node, ctx: self.1, is_child: true, entry_cursor: 0 })
 	}
 }
 impl<'doc, Context: 'doc> Iterator for IterChildNodes<IterDocumentNodesWithName<'doc>, &'doc Context> {
@@ -162,7 +169,7 @@ impl<'doc, Context: 'doc> Iterator for IterChildNodes<IterDocumentNodesWithName<
 	fn next(&mut self) -> Option<Self::Item> {
 		let iter_doc = self.0.as_mut()?;
 		let node = iter_doc.next()?;
-		Some(Node::new(node, self.1))
+		Some(Node { node, ctx: self.1, is_child: true, entry_cursor: 0 })
 	}
 }
 

@@ -202,8 +202,7 @@ where
 		if self.0.inner() != &self.1 {
 			let entry_builder: Entry = self.0.into();
 			entry_builder.into_node()
-		}
-		else {
+		} else {
 			Node::default()
 		}
 	}
