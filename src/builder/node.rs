@@ -333,7 +333,6 @@ where
 		let node_name: kdl::KdlIdentifier = self.0 .0.into();
 		for item in self.0 .1 .0.into_iter() {
 			let child = Node::default() + OmitIfEmpty(Value(item));
-			println!("{child:?}");
 			if !child.is_empty() {
 				builder.children.push(child.build(node_name.clone()));
 			}

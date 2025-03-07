@@ -161,7 +161,12 @@ impl<'doc, Context: 'doc> Iterator for IterChildNodes<IterDocumentNodes<'doc>, &
 	fn next(&mut self) -> Option<Self::Item> {
 		let iter_doc = self.0.as_mut()?;
 		let node = iter_doc.next()?;
-		Some(Node { node, ctx: self.1, is_child: true, entry_cursor: 0 })
+		Some(Node {
+			node,
+			ctx: self.1,
+			is_child: true,
+			entry_cursor: 0,
+		})
 	}
 }
 impl<'doc, Context: 'doc> Iterator for IterChildNodes<IterDocumentNodesWithName<'doc>, &'doc Context> {
@@ -169,7 +174,12 @@ impl<'doc, Context: 'doc> Iterator for IterChildNodes<IterDocumentNodesWithName<
 	fn next(&mut self) -> Option<Self::Item> {
 		let iter_doc = self.0.as_mut()?;
 		let node = iter_doc.next()?;
-		Some(Node { node, ctx: self.1, is_child: true, entry_cursor: 0 })
+		Some(Node {
+			node,
+			ctx: self.1,
+			is_child: true,
+			entry_cursor: 0,
+		})
 	}
 }
 
