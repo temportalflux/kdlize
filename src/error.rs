@@ -17,6 +17,14 @@ impl From<RequiredValue<ValueTypeMismatch>> for QueryError {
 		}
 	}
 }
+impl From<ParseValueFromStr<std::convert::Infallible>> for QueryError {
+	fn from(value: ParseValueFromStr<std::convert::Infallible>) -> Self {
+		match value {
+			ParseValueFromStr::FailedToParse(mismatch) => Self::ValueTypeMismatch(mismatch),
+			ParseValueFromStr::FailedToInterpret(_infallible) => panic!("infallible parse from str"),
+		}
+	}
+}
 
 /// The node is missing an entry that was required.
 #[derive(thiserror::Error, Debug, Clone, PartialEq)]
