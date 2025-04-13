@@ -53,8 +53,8 @@ impl std::fmt::Display for MissingEntry {
 pub struct MissingEntryType(pub(crate) kdl::KdlEntry);
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq)]
-#[error("Node {0} is missing a child node with name \"{1}\"")]
-pub struct MissingChild(pub(crate) kdl::KdlNode, pub(crate) kdl::KdlIdentifier);
+#[error("Document {0} is missing a child node with name \"{1}\"")]
+pub struct MissingChild(pub kdl::KdlDocument, pub kdl::KdlIdentifier);
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq)]
 #[error("Node \"{0}\" is missing children/subdocument")]

@@ -119,7 +119,7 @@ impl<'doc, Context> Node<'doc, Context> {
 	pub fn child(&self, key: impl Into<kdl::KdlIdentifier>) -> Result<Self, crate::error::MissingChild> {
 		let key = key.into();
 		let child = self.children(key.clone()).next();
-		child.ok_or_else(|| crate::error::MissingChild(self.node.clone(), key))
+		child.ok_or_else(|| crate::error::MissingChild(self.node.children().unwrap().clone(), key))
 	}
 
 	pub fn to<T: crate::FromKdlNode<'doc, Context>>(&mut self) -> Result<T, T::Error> {
