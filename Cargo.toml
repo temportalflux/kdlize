@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-kdl = { version = "6", git = "https://github.com/kdl-org/kdl-rs" }
+kdl = "^6"
 thiserror = "^2.0"
 anyhow = "^1.0"
+miette = "^7.6"

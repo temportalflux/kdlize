@@ -103,6 +103,16 @@ impl AsKdlValue for std::path::PathBuf {
 	}
 }
 
+#[derive(thiserror::Error, Debug, miette::Diagnostic)]
+pub enum FailedToParseValueString {
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	TypeMismatch(crate::error::ValueTypeMismatch),
+	#[error(transparent)]
+	#[diagnostic(transparent)]
+	FromStr(Box<dyn miette::Diagnostic + Send + Sync>),
+}
+
 // Implements FromKdlValue and AsKdlValue for the provided type,
 // such that the expected value is a string, and the provided type is parsed to/from a string using FromStr/ToString.
 #[macro_export]
@@ -111,15 +121,19 @@ macro_rules! impl_kdlvalue_str {
 		impl<'doc> $crate::FromKdlValue<'doc> for $target
 		where
 			$target: std::str::FromStr,
+			miette::Report: From<<$target as std::str::FromStr>::Err>,
 		{
-			type Error = $crate::error::ParseValueFromStr<<$target as std::str::FromStr>::Err>;
+			type Error = miette::Report;
 			fn from_kdl(value: &'doc kdl::KdlValue) -> Result<Self, Self::Error> {
 				let value = match value {
 					kdl::KdlValue::String(value) => value,
-					_ => return Err($crate::error::ValueTypeMismatch::new(&value, "String").into()),
+					_ => {
+						let type_mismatch = $crate::error::ValueTypeMismatch::new(&value, "String");
+						return Err(miette::Report::new(type_mismatch))
+					}
 				};
 				let result = <$target as std::str::FromStr>::from_str(value);
-				let result = result.map_err(|err| $crate::error::ParseValueFromStr::FailedToInterpret(err));
+				//let result = result.map_err(|err| $crate::FailedToParseValueString::FromStr(Box::new(err)));
 				Ok(result?)
 			}
 		}
@@ -142,7 +156,7 @@ macro_rules! impl_kdlvalue_str {
 mod test {
 	struct ExampleStr;
 	impl std::str::FromStr for ExampleStr {
-		type Err = ();
+		type Err = std::convert::Infallible;
 		fn from_str(_s: &str) -> Result<Self, Self::Err> {
 			Ok(Self)
 		}

@@ -7,7 +7,7 @@ pub enum QueryError {
 	#[error(transparent)]
 	ValueTypeMismatch(#[from] ValueTypeMismatch),
 	#[error(transparent)]
-	MissingChild(#[from] MissingChild),
+	MissingChild(#[from] NodeMissingChild),
 }
 impl From<RequiredValue<ValueTypeMismatch>> for QueryError {
 	fn from(value: RequiredValue<ValueTypeMismatch>) -> Self {
@@ -17,48 +17,75 @@ impl From<RequiredValue<ValueTypeMismatch>> for QueryError {
 		}
 	}
 }
-impl From<ParseValueFromStr<std::convert::Infallible>> for QueryError {
-	fn from(value: ParseValueFromStr<std::convert::Infallible>) -> Self {
-		match value {
-			ParseValueFromStr::FailedToParse(mismatch) => Self::ValueTypeMismatch(mismatch),
-			ParseValueFromStr::FailedToInterpret(_infallible) => panic!("infallible parse from str"),
-		}
-	}
-}
 
 /// The node is missing an entry that was required.
-#[derive(thiserror::Error, Debug, Clone, PartialEq)]
-pub struct MissingEntry(kdl::KdlNode, kdl::NodeKey);
+#[derive(thiserror::Error, Debug, Clone, PartialEq, miette::Diagnostic)]
+#[diagnostic(code(kdlize::missing_entry))]
+pub struct MissingEntry {
+	#[source_code]
+	pub(crate) src: String,
+	pub(crate) span: miette::LabeledSpan,
+	pub(crate) key: kdl::NodeKey,
+}
 impl MissingEntry {
 	pub(crate) fn new_index(node: kdl::KdlNode, idx: usize) -> Self {
-		Self(node, kdl::NodeKey::Index(idx))
+		let src = node.to_string();
+		let label = format!("missing value at index {idx}");
+		let span = miette::LabeledSpan::new_primary_with_span(Some(label), (0, src.len()));
+		Self {
+			src,
+			span,
+			key: kdl::NodeKey::Index(idx),
+		}
 	}
 	pub(crate) fn new_prop(node: kdl::KdlNode, key: impl AsRef<str>) -> Self {
-		Self(node, kdl::NodeKey::Key(kdl::KdlIdentifier::from(key.as_ref())))
+		let src = node.to_string();
+		let label = format!("missing value at property {:?}", key.as_ref());
+		let span = miette::LabeledSpan::new_primary_with_span(Some(label), (0, src.len()));
+		Self { src, span, key: kdl::NodeKey::Key(kdl::KdlIdentifier::from(key.as_ref())) }
 	}
 }
 impl std::fmt::Display for MissingEntry {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match &self.1 {
-			kdl::NodeKey::Index(v) => write!(f, "Node {} is missing an entry at index {v}", self.0),
+		match &self.key {
+			kdl::NodeKey::Index(v) => write!(f, "Node {:?} is missing an entry at index {v}", self.src),
 			kdl::NodeKey::Key(v) => {
-				write!(f, "Node {} is missing an entry at property {}", self.0, v.value())
+				write!(f, "Node {:?} is missing an entry at property {}", self.src, v.value())
 			}
 		}
 	}
 }
 
-#[derive(thiserror::Error, Debug, Clone, PartialEq)]
-#[error("Entry \"{0}\" is missing a type identifier")]
-pub struct MissingEntryType(pub(crate) kdl::KdlEntry);
+#[derive(thiserror::Error, Debug, Clone, PartialEq, miette::Diagnostic)]
+#[error("Entry {value:?} is missing a type identifier")]
+#[diagnostic(code(kdlize::entry_missing_type))]
+pub struct MissingEntryType {
+	#[source_code]
+	pub(crate) src: String,
+	#[label("missing type annotation")]
+	pub(crate) span: miette::SourceSpan,
+	pub(crate) value: kdl::KdlEntry,
+}
 
-#[derive(thiserror::Error, Debug, Clone, PartialEq)]
-#[error("Document {0} is missing a child node with name \"{1}\"")]
-pub struct MissingChild(pub kdl::KdlDocument, pub kdl::KdlIdentifier);
+#[derive(thiserror::Error, Debug, Clone, PartialEq, miette::Diagnostic)]
+#[error("Node {src:?} is missing a child node with name \"{child_name}\"")]
+#[diagnostic(code(kdlize::node_missing_child))]
+pub struct NodeMissingChild {
+	#[source_code]
+	pub src: String,
+	pub span: miette::LabeledSpan,
+	pub child_name: kdl::KdlIdentifier,
+}
 
-#[derive(thiserror::Error, Debug, Clone, PartialEq)]
-#[error("Node \"{0}\" is missing children/subdocument")]
-pub struct MissingDocument(pub(crate) kdl::KdlNode);
+#[derive(thiserror::Error, Debug, Clone, PartialEq, miette::Diagnostic)]
+#[error("Node is missing children document")]
+#[diagnostic(code(kdlize::missing_node_document))]
+pub struct MissingNodeDocument {
+	#[source_code]
+	pub(crate) src: String,
+	#[label("missing children")]
+	pub(crate) node_span: miette::SourceSpan,
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum MissingTypedEntry {
@@ -79,24 +106,19 @@ pub enum RequiredValue<E> {
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum RequiredChild<E> {
 	#[error(transparent)]
-	Missing(MissingChild),
+	Missing(NodeMissingChild),
 	#[error(transparent)]
 	Parse(#[from] E),
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum ParseValueFromStr<TError> {
-	// Could not parse the kdl value as an str
-	#[error(transparent)]
-	FailedToParse(#[from] ValueTypeMismatch),
-	// Could not convert str to T
-	#[error(transparent)]
-	FailedToInterpret(TError),
+#[derive(thiserror::Error, Debug, PartialEq, miette::Diagnostic)]
+#[error("Expected '{value}' to be a '{expected_type}', but it is a '{actual_type}'.")]
+#[diagnostic(code(kdlize::value_unexpected_type))]
+pub struct ValueTypeMismatch {
+	pub expected_type: &'static str,
+	pub actual_type: &'static str,
+	pub value: kdl::KdlValue,
 }
-
-#[derive(thiserror::Error, Debug, PartialEq)]
-#[error("Expected '{2}' to be a '{0}', but it is a '{1}'.")]
-pub struct ValueTypeMismatch(&'static str, &'static str, kdl::KdlValue);
 impl ValueTypeMismatch {
 	pub fn new(value: &kdl::KdlValue, desired: &'static str) -> Self {
 		let actual_name = match value {
@@ -106,6 +128,6 @@ impl ValueTypeMismatch {
 			kdl::KdlValue::Bool(_) => "Bool",
 			kdl::KdlValue::Null => "Null",
 		};
-		Self(desired, actual_name, value.clone())
+		Self { expected_type: desired, actual_type: actual_name, value: value.clone() }
 	}
 }

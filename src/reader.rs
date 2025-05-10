@@ -69,10 +69,17 @@ impl<'doc, Context> Node<'doc, Context> {
 		self.node.entries()
 	}
 
-	pub fn document(&self) -> Result<&'doc kdl::KdlDocument, crate::error::MissingDocument> {
-		self.node
-			.children()
-			.ok_or_else(|| crate::error::MissingDocument(self.node.clone()))
+	pub fn document(&self) -> Result<&'doc kdl::KdlDocument, crate::error::MissingNodeDocument> {
+		match self.node.children() {
+			Some(doc) => Ok(doc),
+			None => {
+				let src = self.node.to_string();
+				Err(crate::error::MissingNodeDocument {
+					node_span: (0, src.len()).into(),
+					src,
+				})
+			}
+		}
 	}
 
 	pub fn has_children(&self) -> bool {
@@ -116,10 +123,19 @@ impl<'doc, Context> Node<'doc, Context> {
 		IterChildNodes(iter_doc, &self.ctx)
 	}
 
-	pub fn child(&self, key: impl Into<kdl::KdlIdentifier>) -> Result<Self, crate::error::MissingChild> {
+	pub fn child(&self, key: impl Into<kdl::KdlIdentifier>) -> Result<Self, crate::error::NodeMissingChild> {
 		let key = key.into();
 		let child = self.children(key.clone()).next();
-		child.ok_or_else(|| crate::error::MissingChild(self.node.children().unwrap().clone(), key))
+		child.ok_or_else(|| {
+			let src = self.node.to_string();
+			let label = format!("missing child named {:?}", key.value());
+			let span = miette::LabeledSpan::new_primary_with_span(Some(label), (0, src.len()));
+			crate::error::NodeMissingChild {
+				src,
+				span,
+				child_name: key, 
+			}
+		})
 	}
 
 	pub fn to<T: crate::FromKdlNode<'doc, Context>>(&mut self) -> Result<T, T::Error> {
@@ -298,8 +314,18 @@ pub trait EntryExt<'doc> {
 }
 impl<'doc> EntryExt<'doc> for kdl::KdlEntry {
 	fn typed(&'doc self) -> Result<&'doc str, crate::error::MissingEntryType> {
-		let ty = self.ty().map(kdl::KdlIdentifier::value);
-		ty.ok_or_else(|| crate::error::MissingEntryType(self.clone()))
+		match self.ty().map(kdl::KdlIdentifier::value) {
+			Some(value) => Ok(value),
+			None => {
+				// TODO: Would be nice if the source was the node itself
+				let src = self.to_string();
+				Err(crate::error::MissingEntryType {
+					span: (0, src.len()).into(),
+					src,
+					value: self.clone(),
+				})
+			}
+		}
 	}
 
 	fn to<T>(&'doc self) -> Result<T, T::Error>
@@ -310,20 +336,41 @@ impl<'doc> EntryExt<'doc> for kdl::KdlEntry {
 	}
 }
 
+#[derive(thiserror::Error, Debug)]
+#[error("Failed to parse value: {err:?}")]
+pub struct FailedToParseValue {
+	span: miette::SourceSpan,
+	err: miette::Report,
+}
+impl miette::Diagnostic for FailedToParseValue {
+	fn code<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
+		Some(Box::new("kdlize::failed_to_parse_value"))
+	}
+
+	fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
+		Some(Box::new(vec![
+			miette::LabeledSpan::new_with_span(Some(format!("{}", self.err)), self.span.clone()),
+		].into_iter()))
+	}
+}
+
 pub trait EntryOptExt<'doc> {
-	fn to<T>(&self) -> Result<Option<T>, T::Error>
+	fn to<T>(&self) -> Result<Option<T>, FailedToParseValue>
 	where
-		T: crate::FromKdlValue<'doc>;
+		T: crate::FromKdlValue<'doc>, miette::Report: From<T::Error>; // T::Error: miette::Diagnostic + Send + Sync + 'static;
 }
 impl<'doc> EntryOptExt<'doc> for Option<&'doc kdl::KdlEntry> {
-	fn to<T>(&self) -> Result<Option<T>, T::Error>
+	fn to<T>(&self) -> Result<Option<T>, FailedToParseValue>
 	where
-		T: crate::FromKdlValue<'doc>,
+		T: crate::FromKdlValue<'doc>, miette::Report: From<T::Error>, // T::Error: miette::Diagnostic + Send + Sync + 'static,
 	{
-		match self {
-			Self::Some(entry) => Ok(Some(T::from_kdl(entry.value())?)),
-			Self::None => Ok(None),
-		}
+		let Some(entry) = self else { return Ok(None) };
+		let result = T::from_kdl(entry.value());
+		let parsed_value = result.map_err(|err| {
+			let span = entry.span();
+			FailedToParseValue { span, err: miette::Report::from(err) }
+		})?;
+		Ok(Some(parsed_value))
 	}
 }
 
@@ -380,7 +427,6 @@ impl DocumentExt for kdl::KdlDocument {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::error::QueryError;
 
 	fn empty() -> kdl::KdlNode {
 		kdl::KdlNode::new("empty")
@@ -427,7 +473,7 @@ mod test {
 	}
 
 	#[test]
-	fn peak_value() -> Result<(), QueryError> {
+	fn peak_value() -> Result<(), miette::Error> {
 		let node = node();
 		let reader = Node::new(&node, &());
 		assert_eq!(reader.peak()?.to::<u32>()?, 42);
@@ -436,7 +482,7 @@ mod test {
 	}
 
 	#[test]
-	fn next_typed() -> Result<(), QueryError> {
+	fn next_typed() -> Result<(), miette::Error> {
 		let node = node();
 		let mut reader = Node::new(&node, &());
 		let _ = reader.next();
@@ -449,7 +495,7 @@ mod test {
 	}
 
 	#[test]
-	fn next_value() -> Result<(), QueryError> {
+	fn next_value() -> Result<(), miette::Error> {
 		let node = node();
 		let mut reader = Node::new(&node, &());
 		assert_eq!(reader.next()?.to::<u32>()?, 42);
@@ -459,7 +505,7 @@ mod test {
 	}
 
 	#[test]
-	fn property_value() -> Result<(), QueryError> {
+	fn property_value() -> Result<(), miette::Error> {
 		let node = node();
 		let reader = Node::new(&node, &());
 		assert_eq!(reader.prop("some_key")?.to::<f32>()?, 3.0);
@@ -467,7 +513,7 @@ mod test {
 	}
 
 	#[test]
-	fn child_node() -> Result<(), QueryError> {
+	fn child_node() -> Result<(), miette::Error> {
 		let node = node();
 		let reader = Node::new(&node, &());
 		let value = reader.child("child1")?;
@@ -486,7 +532,7 @@ mod test {
 	}
 
 	#[test]
-	fn child_next_value() -> Result<(), QueryError> {
+	fn child_next_value() -> Result<(), miette::Error> {
 		let node = node();
 		let reader = Node::new(&node, &());
 		let value = reader.child("child1")?.next()?.to::<u32>()?;
@@ -521,13 +567,13 @@ mod test {
 	}
 
 	#[test]
-	fn child_fromnode() -> Result<(), QueryError> {
+	fn child_fromnode() -> Result<(), miette::Error> {
 		#[derive(PartialEq, Debug)]
 		struct ExampleData {
 			value: u32,
 		}
 		impl<'doc> crate::FromKdlNode<'doc, ()> for ExampleData {
-			type Error = QueryError;
+			type Error = miette::Error;
 			fn from_kdl(node: &mut super::Node<()>) -> Result<Self, Self::Error> {
 				let value = node.next()?.to::<u32>()?;
 				Ok(Self { value })
@@ -541,7 +587,7 @@ mod test {
 	}
 
 	#[test]
-	fn child_all_fromnode() -> Result<(), QueryError> {
+	fn child_all_fromnode() -> Result<(), miette::Error> {
 		#[derive(PartialEq, Debug)]
 		struct ExampleData {
 			string: String,
