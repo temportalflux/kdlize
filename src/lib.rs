@@ -115,21 +115,23 @@ pub enum FailedToParseValueString {
 
 // Implements FromKdlValue and AsKdlValue for the provided type,
 // such that the expected value is a string, and the provided type is parsed to/from a string using FromStr/ToString.
+#[doc(hidden)]
+pub type MacroReport = miette::Report;
 #[macro_export]
 macro_rules! impl_kdlvalue_str {
 	($target:ty) => {
 		impl<'doc> $crate::FromKdlValue<'doc> for $target
 		where
 			$target: std::str::FromStr,
-			miette::Report: From<<$target as std::str::FromStr>::Err>,
+			$crate::MacroReport: From<<$target as std::str::FromStr>::Err>,
 		{
-			type Error = miette::Report;
+			type Error = $crate::MacroReport;
 			fn from_kdl(value: &'doc kdl::KdlValue) -> Result<Self, Self::Error> {
 				let value = match value {
 					kdl::KdlValue::String(value) => value,
 					_ => {
 						let type_mismatch = $crate::error::ValueTypeMismatch::new(&value, "String");
-						return Err(miette::Report::new(type_mismatch))
+						return Err($crate::MacroReport::new(type_mismatch))
 					}
 				};
 				let result = <$target as std::str::FromStr>::from_str(value);

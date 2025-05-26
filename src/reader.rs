@@ -261,8 +261,9 @@ impl<'doc, Iter, T> Iterator for IterNodeValueTyped<Iter, T>
 where
 	Iter: Iterator<Item = Result<&'doc kdl::KdlEntry, crate::error::MissingEntry>>,
 	T: crate::FromKdlValue<'doc>,
+	miette::Report: From<T::Error>,
 {
-	type Item = Result<Result<T, T::Error>, crate::error::MissingEntry>;
+	type Item = Result<Result<T, FailedToParseValue>, crate::error::MissingEntry>;
 	fn next(&mut self) -> Option<Self::Item> {
 		match self.0.next()? {
 			Err(missing_entry) => Some(Err(missing_entry)),
@@ -272,9 +273,9 @@ where
 }
 impl<'doc, Iter, T: crate::FromKdlValue<'doc>> IterNodeValueTyped<Iter, T>
 where
-	Self: Iterator<Item = Result<Result<T, T::Error>, crate::error::MissingEntry>>,
+	Self: Iterator<Item = Result<Result<T, FailedToParseValue>, crate::error::MissingEntry>>,
 {
-	pub fn collect<C: FromIterator<T>>(self) -> Result<Result<C, T::Error>, crate::error::MissingEntry> {
+	pub fn collect<C: FromIterator<T>>(self) -> Result<Result<C, FailedToParseValue>, crate::error::MissingEntry> {
 		match <Self as Iterator>::collect::<Result<Vec<_>, _>>(self) {
 			Ok(inner) => match inner.into_iter().collect::<Result<C, _>>() {
 				Ok(values) => Ok(Ok(values)),
@@ -308,9 +309,9 @@ where
 
 pub trait EntryExt<'doc> {
 	fn typed(&'doc self) -> Result<&'doc str, crate::error::MissingEntryType>;
-	fn to<T>(&'doc self) -> Result<T, T::Error>
+	fn to<T>(&'doc self) -> Result<T, FailedToParseValue>
 	where
-		T: crate::FromKdlValue<'doc>;
+		T: crate::FromKdlValue<'doc>, miette::Report: From<T::Error>;
 }
 impl<'doc> EntryExt<'doc> for kdl::KdlEntry {
 	fn typed(&'doc self) -> Result<&'doc str, crate::error::MissingEntryType> {
@@ -328,11 +329,16 @@ impl<'doc> EntryExt<'doc> for kdl::KdlEntry {
 		}
 	}
 
-	fn to<T>(&'doc self) -> Result<T, T::Error>
+	fn to<T>(&'doc self) -> Result<T, FailedToParseValue>
 	where
-		T: crate::FromKdlValue<'doc>,
+		T: crate::FromKdlValue<'doc>, miette::Report: From<T::Error>,
 	{
-		T::from_kdl(self.value())
+		let result = T::from_kdl(self.value());
+		let parsed_value = result.map_err(|err| {
+			let span = self.span();
+			FailedToParseValue { span, err: miette::Report::from(err) }
+		})?;
+		Ok(parsed_value)
 	}
 }
 
