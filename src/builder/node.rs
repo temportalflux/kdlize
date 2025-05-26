@@ -200,6 +200,12 @@ impl<V: AsKdlValue> NodeComponent for Value<V> {
 		entry.apply_to(builder);
 	}
 }
+impl<V: AsKdlValue> NodeComponent for super::MultiLine<V> {
+	fn apply_to(self, builder: &mut Node) {
+		let entry: Entry = self.into();
+		entry.apply_to(builder);
+	}
+}
 impl NodeComponent for &kdl::KdlValue {
 	fn apply_to(self, builder: &mut Node) {
 		let mut entry = Entry::default();

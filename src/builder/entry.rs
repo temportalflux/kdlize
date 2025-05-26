@@ -51,6 +51,30 @@ impl<V: AsKdlValue> Into<Entry> for Value<V> {
 	}
 }
 
+pub struct MultiLine<V>(pub Value<V>);
+impl<V> InnerValue for MultiLine<&V> {
+	type Inner = V;
+	fn inner(&self) -> &Self::Inner {
+		self.0 .0
+	}
+}
+// TODO: Add associated-type to AsKdlValue to identify that the output is a string and limit MultiLine to string values
+impl<V: AsKdlValue> Into<Entry> for MultiLine<V> {
+	fn into(self) -> Entry {
+		let mut builder: Entry = self.0.into();
+		if let Some(value_str) = builder.entry.value().as_string() {
+			builder.entry.set_format({
+				let mut format = kdl::KdlEntryFormat::default();
+				format.autoformat_keep = true;
+				format.leading = " ".to_owned();
+				format.value_repr = format!("\"{value_str}\"");
+				format
+			});
+		}
+		builder
+	}
+}
+
 impl<Ty: Into<kdl::KdlIdentifier>, I, V> InnerValue for Typed<Ty, I>
 where
 	I: InnerValue<Inner = V>,

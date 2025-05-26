@@ -64,6 +64,14 @@ mod test {
 	}
 
 	#[test]
+	fn node_with_multilinevalue() {
+		let content = "some multi\nline string\nwith multiple lines";
+		let value = Node::default().with(MultiLine(Value(content))).build("node");
+		let expected = format!("node \"\"\"\n{content}\n\"\"\"\n");
+		assert_eq!(value.to_string(), expected.to_string());
+	}
+
+	#[test]
 	fn child_untyped_value() {
 		let value = {
 			let mut node = Node::default();
@@ -81,6 +89,7 @@ mod test {
 				});
 				doc
 			});
+			node.autoformat();
 			node
 		};
 		assert_eq!(value.to_string(), expected.to_string());
@@ -108,6 +117,7 @@ mod test {
 				});
 				doc
 			});
+			node.autoformat();
 			node
 		};
 		assert_eq!(value.to_string(), expected.to_string());
@@ -135,6 +145,7 @@ mod test {
 				});
 				doc
 			});
+			node.autoformat();
 			node
 		};
 		assert_eq!(value.to_string(), expected.to_string());
@@ -163,6 +174,7 @@ mod test {
 				});
 				doc
 			});
+			node.autoformat();
 			node
 		};
 		assert_eq!(value.to_string(), expected.to_string());
@@ -190,6 +202,7 @@ mod test {
 				});
 				doc
 			});
+			node.autoformat();
 			node
 		};
 		assert_eq!(value.to_string(), expected.to_string());
@@ -220,6 +233,7 @@ mod test {
 				});
 				doc
 			});
+			node.autoformat();
 			node
 		};
 		assert_eq!(value.to_string(), expected.to_string());
@@ -259,6 +273,7 @@ mod test {
 				});
 				doc
 			});
+			node.autoformat();
 			node
 		};
 		assert_eq!(value.to_string(), expected.to_string());
@@ -299,6 +314,7 @@ mod test {
 				});
 				doc
 			});
+			node.autoformat();
 			node
 		};
 		assert_eq!(value.to_string(), expected.to_string());
