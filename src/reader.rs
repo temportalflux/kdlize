@@ -133,7 +133,7 @@ impl<'doc, Context> Node<'doc, Context> {
 			crate::error::NodeMissingChild {
 				src,
 				span,
-				child_name: key, 
+				child_name: key,
 			}
 		})
 	}
@@ -311,7 +311,8 @@ pub trait EntryExt<'doc> {
 	fn typed(&'doc self) -> Result<&'doc str, crate::error::MissingEntryType>;
 	fn to<T>(&'doc self) -> Result<T, FailedToParseValue>
 	where
-		T: crate::FromKdlValue<'doc>, miette::Report: From<T::Error>;
+		T: crate::FromKdlValue<'doc>,
+		miette::Report: From<T::Error>;
 }
 impl<'doc> EntryExt<'doc> for kdl::KdlEntry {
 	fn typed(&'doc self) -> Result<&'doc str, crate::error::MissingEntryType> {
@@ -331,12 +332,16 @@ impl<'doc> EntryExt<'doc> for kdl::KdlEntry {
 
 	fn to<T>(&'doc self) -> Result<T, FailedToParseValue>
 	where
-		T: crate::FromKdlValue<'doc>, miette::Report: From<T::Error>,
+		T: crate::FromKdlValue<'doc>,
+		miette::Report: From<T::Error>,
 	{
 		let result = T::from_kdl(self.value());
 		let parsed_value = result.map_err(|err| {
 			let span = self.span();
-			FailedToParseValue { span, err: miette::Report::from(err) }
+			FailedToParseValue {
+				span,
+				err: miette::Report::from(err),
+			}
 		})?;
 		Ok(parsed_value)
 	}
@@ -354,27 +359,36 @@ impl miette::Diagnostic for FailedToParseValue {
 	}
 
 	fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
-		Some(Box::new(vec![
-			miette::LabeledSpan::new_with_span(Some(format!("{}", self.err)), self.span.clone()),
-		].into_iter()))
+		Some(Box::new(
+			vec![miette::LabeledSpan::new_with_span(
+				Some(format!("{}", self.err)),
+				self.span.clone(),
+			)]
+			.into_iter(),
+		))
 	}
 }
 
 pub trait EntryOptExt<'doc> {
 	fn to<T>(&self) -> Result<Option<T>, FailedToParseValue>
 	where
-		T: crate::FromKdlValue<'doc>, miette::Report: From<T::Error>; // T::Error: miette::Diagnostic + Send + Sync + 'static;
+		T: crate::FromKdlValue<'doc>,
+		miette::Report: From<T::Error>; // T::Error: miette::Diagnostic + Send + Sync + 'static;
 }
 impl<'doc> EntryOptExt<'doc> for Option<&'doc kdl::KdlEntry> {
 	fn to<T>(&self) -> Result<Option<T>, FailedToParseValue>
 	where
-		T: crate::FromKdlValue<'doc>, miette::Report: From<T::Error>, // T::Error: miette::Diagnostic + Send + Sync + 'static,
+		T: crate::FromKdlValue<'doc>,
+		miette::Report: From<T::Error>, // T::Error: miette::Diagnostic + Send + Sync + 'static,
 	{
 		let Some(entry) = self else { return Ok(None) };
 		let result = T::from_kdl(entry.value());
 		let parsed_value = result.map_err(|err| {
 			let span = entry.span();
-			FailedToParseValue { span, err: miette::Report::from(err) }
+			FailedToParseValue {
+				span,
+				err: miette::Report::from(err),
+			}
 		})?;
 		Ok(Some(parsed_value))
 	}

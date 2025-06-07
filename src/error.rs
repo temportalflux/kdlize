@@ -42,7 +42,11 @@ impl MissingEntry {
 		let src = node.to_string();
 		let label = format!("missing value at property {:?}", key.as_ref());
 		let span = miette::LabeledSpan::new_primary_with_span(Some(label), (0, src.len()));
-		Self { src, span, key: kdl::NodeKey::Key(kdl::KdlIdentifier::from(key.as_ref())) }
+		Self {
+			src,
+			span,
+			key: kdl::NodeKey::Key(kdl::KdlIdentifier::from(key.as_ref())),
+		}
 	}
 }
 impl std::fmt::Display for MissingEntry {
@@ -128,6 +132,10 @@ impl ValueTypeMismatch {
 			kdl::KdlValue::Bool(_) => "Bool",
 			kdl::KdlValue::Null => "Null",
 		};
-		Self { expected_type: desired, actual_type: actual_name, value: value.clone() }
+		Self {
+			expected_type: desired,
+			actual_type: actual_name,
+			value: value.clone(),
+		}
 	}
 }

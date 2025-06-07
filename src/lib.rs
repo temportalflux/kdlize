@@ -131,7 +131,7 @@ macro_rules! impl_kdlvalue_str {
 					kdl::KdlValue::String(value) => value,
 					_ => {
 						let type_mismatch = $crate::error::ValueTypeMismatch::new(&value, "String");
-						return Err($crate::MacroReport::new(type_mismatch))
+						return Err($crate::MacroReport::new(type_mismatch));
 					}
 				};
 				let result = <$target as std::str::FromStr>::from_str(value);
